@@ -3,6 +3,20 @@ pub static SH_INIT: &str = r#"
 # To initialize this for your shell, run:
 # eval "$(j2 init)"
 # To initialize this for your shell permanently, add the above line to your shell's rc file.
+# Set default values
+if [ -z "$HOME" ]; then
+  export HOME=~
+fi
+if [ -z "$J2_IGNORES" ]; then
+  export J2_IGNORES="node_modules:target:dist:venv:env:build:out:output:bin:obj:lib:libs:include:includes:vendor:assets:resources:res:tmp:test:tests"
+fi
+if [ -z "$J2_JONE_PATH" ]; then
+  export J2_JONE_PATH="$HOME/.J2-jones"
+fi
+if [ -z "$J2_EDITOR" ]; then
+  export J2_EDITOR="vi"
+fi
+# Create functions
 __J2="<EXECUTABLE_PATH>"
 __J2_find_first() {
   # Find directory;
@@ -89,8 +103,8 @@ J() {
       echo "  J2_REPOS_DIR: The directory where git repositories are stored"
       echo "  J2_FIND_BASE_PATHS: The base paths to find directories (separated by ':')"
       echo "  J2_IGNORES: The directories to ignore when finding (separated by ':')"
-      echo "  J2_JONE_PATH: The path to store jone files"
-      echo "  J2_EDITOR: The command name of editor to edit jone notes (e.g. vi)"
+      echo "  J2_JONE_PATH: The path to store jone files (default: ~/.J2-jones)"
+      echo "  J2_EDITOR: The command name of editor to edit jone notes (default: vi)"
       echo "Shortcuts:"
       echo "  j <QUERY>: Find a directory and cd"
       echo "  j-- [<NAME>]: Create a new jone with name."
