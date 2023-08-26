@@ -86,11 +86,15 @@ fn gather_directories(
   if config.ignores.contains(&filename.to_string()) {
     return;
   }
-  let path_name: String = format!("/{}", filename.to_lowercase());
-  let mut query_chars = query.chars().peekable();
+  let path_name = filename.to_lowercase();
+  let mut query_chars = query.char_indices().peekable();
+  let p = query_chars.peek();
+  if p.is_some() && p.unwrap().1 == '/' {
+    query_chars.next();
+  }
   for c in path_name.chars() {
     if let Some(qc) = query_chars.peek() {
-      if c == *qc {
+      if c == qc.1 {
         query_chars.next();
       }
     }
@@ -104,7 +108,7 @@ fn gather_directories(
       loss: edit_distance(path.strip_prefix(root).unwrap_or(path), original_query),
     });
   } else {
-    let new_query = query_chars.collect::<String>();
+    let new_query = &query[query_chars.peek().unwrap().0..];
     // Find recursively
     if let Ok(entries) = dir.read_dir() {
       // Check directory contains .git
@@ -130,7 +134,7 @@ fn gather_directories(
         let hidden = file_name.is_some()
           && file_name.unwrap().to_str().unwrap().starts_with(".");
         if path.is_dir() && !hidden {
-          gather_directories(config, result, root, original_query, new_query.as_str(), &path);
+          gather_directories(config, result, root, original_query, new_query, &path);
         }
       }
     }
