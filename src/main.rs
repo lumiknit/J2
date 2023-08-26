@@ -3,67 +3,18 @@
  * Version: 0.0.1 (230825)
  */
 
-use std::{env, fs, path, time, vec};
+use std::{env, fs, path, vec};
 use std::process::{exit, Command};
 
-use chrono::Datelike;
+pub mod config;
+pub mod section;
+pub mod sh_init;
+pub mod help_msg;
 
-struct Config {
-  // Clone config
-  repos_path: String,
-  // Find config
-  find_base_paths: Vec<String>,
-  ignores: Vec<String>,
-  // Jone config
-  jone_path: String,
-}
+use config::Config;
+use section::JoneSection;
 
-impl Config {
-  fn from_env() -> Self {
-    let repos_path =
-      env::var("J2_REPOS_DIR").expect("Please set env $J2_REPOS_DIR");
-    let find_base_paths = env::var("J2_FIND_BASE_PATHS")
-      .expect("Please set env $J2_FIND_BASE_PATHS")
-      .split(":")
-      .map(|s| s.to_string())
-      .collect();
-    let ignores = env::var("J2_IGNORES")
-      .expect("Please set env $J2_IGNORES")
-      .split(":")
-      .map(|s| s.to_string())
-      .collect();
-    let jone_path =
-      env::var("J2_JONE_PATH").expect("Please set env $J2_JONE_PATH");
-    Self {
-      repos_path,
-      find_base_paths,
-      ignores,
-      jone_path,
-    }
-  }
-}
-
-fn print_help() {
-  let s = "
-luminkit's jump helper 2
-Usage: J2 <COMMAND> [ARGS]
-Commands:
-  help: Print this help message
-  init: Print the initialization script
-  find <QUERY>: Find a directory
-  clone <REPO_URL>: Clone a git repository
-  jone-new [<NAME>]: Create a new jone (j-zone)
-  jone-list: List jones
-  jone-sections [<NAME>]: List sections in the jone
-Environment variables:
-  J2_REPOS_DIR: The directory where git repositories are stored
-  J2_FIND_BASE_PATHS: The base paths to find directories (separated by ':')
-  J2_IGNORES: The directories to ignore when finding (separated by ':')
-  J2_JONE_PATH: The path to store jone files
-  J2_EDITOR: The command name of editor to edit jone notes (e.g. vi)
-";
-  println!("{}", s.trim());
-}
+const VERSION: &str = "0.0.1";
 
 fn get_executable_path(exe: &str) -> Option<String> {
   // Convert relative path to absolute path
@@ -73,25 +24,13 @@ fn get_executable_path(exe: &str) -> Option<String> {
     .and_then(|p| p.to_str().map(|s| s.to_string()))
 }
 
+fn print_version() {
+  println!("lumiknit's jump helper v{}", VERSION);
+}
+
 fn print_init(exe: &str) {
   let exe = get_executable_path(exe).unwrap_or(String::from("j2"));
-  let s = format!(
-        "
-# luminkit's jump helper 2
-# To initialize this for your shell, run:
-# eval \"$(j2 init)\"
-# To initialize this for your shell permanently, add the above line to your shell's rc file.
-__J2=\"{}\"
-J() {{
-    case \"$1\" in
-        a) echo \"ASD\";;
-        *) echo \"Invalid command: $1\";;
-    esac
-    $__J2
-}}
-",
-        exe
-    );
+  let s = sh_init::SH_INIT.replace("<EXECUTABLE_PATH>", exe.as_str());
   println!("{}", s.trim());
 }
 
@@ -102,12 +41,43 @@ struct Dir {
   loss: u32,
 }
 
+fn edit_distance(
+  path: &str,
+  query: &str,
+) -> u32 {
+  let p = path.as_bytes();
+  let q = query.as_bytes();
+  let mut d = vec![vec![0; p.len()]; 2];
+  for i in 0..p.len() {
+    d[1][i] = 0 as u32;
+  }
+  for i in 0..q.len() {
+    let qc = q[i];
+    let qp = if i == 0 { 1 } else { q[i - 1] };
+    for j in 0..p.len() {
+      let pc = p[j];
+      let pp = if j == 0 { 0 } else { p[j - 1] };
+      let mut costs = vec![0];
+      if qc == pc {
+        if j == 0 {
+          costs.push(200);
+        } else {
+          costs.push(d[(i + 1) % 2][j - 1] + if qp == pp { 200 } else { 100 });
+        }
+      }
+      d[i % 2][j] = *costs.iter().max().unwrap();
+    }
+  }
+  d[(q.len() + 1) % 2].iter().max().unwrap_or(&0).clone() + 4096 - (p.len() as u32)
+}
+
 fn gather_directories(
   config: &Config,
   result: &mut Vec<Dir>,
+  root: &str,
+  original_query: &str,
   query: &str,
   dir: &path::Path,
-  loss: u32,
 ) {
   if !dir.is_dir() {
     return;
@@ -118,30 +88,41 @@ fn gather_directories(
   }
   let path_name: String = format!("/{}", filename.to_lowercase());
   let mut query_chars = query.chars().peekable();
-  let mut l = loss;
-  let mut dl = 1; // penalty of mismatch
   for c in path_name.chars() {
     if let Some(qc) = query_chars.peek() {
       if c == *qc {
         query_chars.next();
-        dl = 1;
-      } else {
-        l += dl;
-        dl = 0;
       }
     }
   }
   if query_chars.peek().is_none() {
     // Found!
+    let path = dir.to_str().unwrap();
     result.push(Dir {
-      path: dir.to_str().unwrap().to_string(),
+      path: path.to_string(),
       name: filename.to_string(),
-      loss: 0,
+      loss: edit_distance(path.strip_prefix(root).unwrap_or(path), original_query),
     });
   } else {
     let new_query = query_chars.collect::<String>();
     // Find recursively
     if let Ok(entries) = dir.read_dir() {
+      // Check directory contains .git
+      let mut has_git = false;
+      for entry in dir.read_dir().unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        let file_name = path.file_name();
+        if file_name.is_some()
+          && file_name.unwrap().to_str().unwrap() == ".git"
+        {
+          has_git = true;
+          break;
+        }
+      }
+      if has_git {
+        return;
+      }
       for entry in entries {
         let entry = entry.unwrap();
         let path = entry.path();
@@ -149,7 +130,7 @@ fn gather_directories(
         let hidden = file_name.is_some()
           && file_name.unwrap().to_str().unwrap().starts_with(".");
         if path.is_dir() && !hidden {
-          gather_directories(config, result, new_query.as_str(), &path, l);
+          gather_directories(config, result, root, original_query, new_query.as_str(), &path);
         }
       }
     }
@@ -160,9 +141,9 @@ fn find_path(config: &Config, search: &str) -> Vec<String> {
   let mut result: Vec<Dir> = vec![];
   for base_path in &config.find_base_paths {
     let path = path::Path::new(base_path);
-    gather_directories(config, &mut result, search, path, 0);
+    gather_directories(config, &mut result, base_path, search, search, path);
   }
-  result.sort_by(|a, b| a.loss.cmp(&b.loss));
+  result.sort_by(|a, b| b.loss.cmp(&a.loss));
   result.iter().map(|d| d.path.clone()).collect()
 }
 
@@ -191,99 +172,9 @@ fn clone(config: &Config, repo_url: &str) {
     .unwrap();
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-enum JoneSectionBase {
-  Base36,
-  Base10,
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct JoneSection {
-  pub year: u32,
-  pub month: u32,
-  pub day: u32,
-  pub sys_time: time::SystemTime,
-  pub rand: u32,
-  pub base: JoneSectionBase,
-}
-
-impl JoneSection {
-  fn gen() -> Self {
-    let now = chrono::Local::now();
-    Self {
-      sys_time: time::SystemTime::now(),
-      year: now.year_ce().1 % 100,
-      month: now.month(),
-      day: now.day(),
-      rand: rand::random::<u32>() % 36_u32.pow(4),
-      base: JoneSectionBase::Base36,
-    }
-  }
-
-  fn base36_rand(&self) -> String {
-    let mut r = self.rand;
-    let mut rs = ['0'; 4];
-    for i in 0..4 {
-      rs[3 - i] = char::from_digit(r % 36, 36).unwrap();
-      r /= 36;
-    }
-    rs.iter().collect::<String>()
-  }
-
-  fn to_base36(&self) -> String {
-    format!(
-      "{:02}{:01}{:01}-{}",
-      self.year,
-      char::from_digit(self.month, 36).unwrap(),
-      char::from_digit(self.day, 36).unwrap(),
-      self.base36_rand(),
-    )
-  }
-
-  fn to_base10(&self) -> String {
-    format!(
-      "{:02}{:02}{:02}-{:04}",
-      self.year, self.month, self.day, self.rand
-    )
-  }
-
-  fn to_string(&self) -> String {
-    match self.base {
-      JoneSectionBase::Base36 => self.to_base36(),
-      JoneSectionBase::Base10 => self.to_base10(),
-    }
-  }
-
-  fn from_str(s: &str, sys_time: Option<time::SystemTime>) -> Option<Self> {
-    if s.len() == 9 && s[4..5].contains('-') {
-      // Base36
-      Some(Self {
-        year: u32::from_str_radix(&s[0..2], 10).ok()?,
-        month: u32::from_str_radix(&s[2..3], 36).ok()?,
-        day: u32::from_str_radix(&s[3..4], 36).ok()?,
-        sys_time: sys_time.unwrap_or(time::SystemTime::now()),
-        rand: u32::from_str_radix(&s[5..9], 36).ok()?,
-        base: JoneSectionBase::Base36,
-      })
-    } else if s.len() == 11 && s[6..7].contains("-") {
-      // Base10
-      Some(Self {
-        year: u32::from_str_radix(&s[0..2], 10).ok()?,
-        month: u32::from_str_radix(&s[2..4], 10).ok()?,
-        day: u32::from_str_radix(&s[4..6], 10).ok()?,
-        sys_time: sys_time.unwrap_or(time::SystemTime::now()),
-        rand: u32::from_str_radix(&s[7..11], 36).ok()?,
-        base: JoneSectionBase::Base10,
-      })
-    } else {
-      None
-    }
-  }
-}
-
 fn jone_list(config: &Config) {
   // Read jone directories
-  let path = path::Path::new(&config.jone_path);
+  let path = path::Path::new(&config.jones_path);
   if let Ok(entries) = path.read_dir() {
     for entry in entries {
       let file_name = entry.ok().and_then(|e| e.file_name().into_string().ok());
@@ -316,9 +207,9 @@ fn canonicalize_jone_name(name: &str) -> String {
   result
 }
 
-fn jone_new(config: &Config, name: &str) {
+fn jone_new(config: &Config, name: &str) -> String {
   let name = canonicalize_jone_name(name);
-  let jone_path = format!("{}/{}", config.jone_path, name);
+  let jone_path = format!("{}/{}", config.jones_path, name);
   // Make directory
   fs::create_dir_all(&jone_path).expect("Failed to create directory");
   // Create jone file
@@ -326,17 +217,17 @@ fn jone_new(config: &Config, name: &str) {
   let section_path = format!("{}/{}", jone_path, section_name);
   fs::create_dir(path::Path::new(&section_path))
     .expect("Failed to create directory");
-  print!("{}", section_path);
+  section_path
 }
 
-fn jone_section_list(config: &Config, name: &str) {
+fn jone_section_list(config: &Config, name: &str) -> vec::Vec<JoneSection> {
   let name = canonicalize_jone_name(name);
-  let jone_path = format!("{}/{}", config.jone_path, name);
+  let jone_path = format!("{}/{}", config.jones_path, name);
   // Read jone directories
   let path = path::Path::new(&jone_path);
   let entries = path.read_dir();
   if entries.is_err() {
-    return;
+    return vec![];
   }
   let entries = entries.unwrap();
   let mut list = vec![];
@@ -356,24 +247,25 @@ fn jone_section_list(config: &Config, name: &str) {
     }
   }
   list.sort_by(|a, b| b.cmp(a));
-  for section in list {
-    println!("{}", section.to_string());
-  }
+  list
 }
 
 fn run(args: Vec<String>) {
   let l = args.len();
   if l <= 1 {
-    print_help();
+    help_msg::print_help();
     return;
   }
   match args[1].as_str() {
+    "version" => {
+      print_version();
+    }
     "init" => {
       print_init(args[0].as_str());
     }
     "find" => {
       let config = Config::from_env();
-      let query = args[2..].join("");
+      let query = args[2..].join("").to_lowercase();
       let result = find_path(&config, query.as_str());
       for path in result {
         println!("{}", path);
@@ -395,7 +287,8 @@ fn run(args: Vec<String>) {
       } else {
         args[2..].join(" ")
       };
-      jone_new(&config, name.as_str());
+      let p = jone_new(&config, name.as_str());
+      println!("{}", p);
     }
     "jone-list" => {
       let config = Config::from_env();
@@ -408,10 +301,28 @@ fn run(args: Vec<String>) {
       } else {
         args[2..].join(" ")
       };
-      jone_section_list(&config, name.as_str());
+      let list = jone_section_list(&config, name.as_str());
+      for section in list {
+        println!("{}", section.to_string());
+      }
+    }
+    "jone-latest" => {
+      let config = Config::from_env();
+      let name = if args.len() < 3 {
+        empty_jone_name()
+      } else {
+        args[2..].join(" ")
+      };
+      let list = jone_section_list(&config, name.as_str());
+      if list.len() > 0 {
+        println!("{}/{}/{}", config.jones_path, name, list[0].to_string());
+      } else {
+        let p = jone_new(&config, name.as_str());
+        println!("{}", p);
+      }
     }
     _ => {
-      print_help();
+      help_msg::print_help();
     }
   }
 }
