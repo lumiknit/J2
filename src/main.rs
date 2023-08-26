@@ -1,6 +1,6 @@
 /* luminkit's jump helper 2
  * Author: lumiknit (aasr4r4@gmail.com)
- * Version: 0.0.1 (230825)
+ * Version: 0.1.0 (230827)
  */
 
 use std::{env, fs, path, vec};
@@ -14,7 +14,7 @@ pub mod help_msg;
 use config::Config;
 use section::JoneSection;
 
-const VERSION: &str = "0.0.1";
+const VERSION: &str = "0.1.0";
 
 fn get_executable_path(exe: &str) -> Option<String> {
   // Convert relative path to absolute path
