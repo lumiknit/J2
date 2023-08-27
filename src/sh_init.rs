@@ -118,7 +118,23 @@ __J2_LIST() {
   $__J2 jone-list
 }
 j() {
-  J cd $@
+  if [ $# -eq 0 ]; then
+    if command -v fzf 2>&1 >/dev/null && command -v fd 2>&1 >/dev/null; then
+      p=$({
+        while read -r d; do
+          fd -c never -t d . "$d" 2>/dev/null
+        done <<< ${J2_FIND_BASE_PATHS//:/$'\n'}
+      } | fzf)
+      if [ $? -eq 0 ]; then
+        cd "$p"
+      fi
+    else
+      echo "J2 Error: No query is given" >&2
+      echo "  If fzf and fd is installed, you can find directory interactively" >&2
+    fi
+  else
+    J cd $@
+  fi
 }
 j--() {
   J jone-new $@
