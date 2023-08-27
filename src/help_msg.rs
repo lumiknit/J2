@@ -1,6 +1,6 @@
 pub static HELP_MSG: &str = r#"
 luminkit's jump helper 2
-Usage: J2 <COMMAND> [ARGS]
+Usage: j2 <COMMAND> [ARGS]
 Commands:
   help: Print this help message
   version: Print the version

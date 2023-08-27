@@ -14,7 +14,7 @@ pub mod help_msg;
 use config::Config;
 use section::JoneSection;
 
-const VERSION: &str = "0.1.1";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn get_executable_path(exe: &str) -> Option<String> {
   // Convert relative path to absolute path
