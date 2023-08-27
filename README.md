@@ -49,6 +49,8 @@ It'll find a directory in one of J2_FIND_BASE_PATHS, which subpath containing QU
 
 If you want pushd instead of cd, run `J pushd <QUERY>`.
 
+If you already installed `fd` and `fzf`, just type `j` to interactive finding.
+
 ### Jones
 
 Jones (J-zone) are a kind of sandbox/playground.
