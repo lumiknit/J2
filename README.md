@@ -10,8 +10,7 @@ lumiknit's jump helper 2.
 
 ## Installation
 
-- Run `cargo build --release`
-- Copy `./target/release/j2` to some bin path which is included in `$PATH`
+- Run `cargo install --path .`
 - Add configuration in shell profile, such as `.bashrc` or `.zshrc`
 
 ### Example Configuration

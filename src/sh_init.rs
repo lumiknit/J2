@@ -107,7 +107,8 @@ J() {
       echo "  J2_EDITOR: The command name of editor to edit jone notes (default: vi)"
       echo "Shortcuts:"
       echo "  j <QUERY>: Find a directory and cd"
-      echo "  j-- [<NAME>]: Create a new jone with name."
+      echo "  j-+ [<NAME>]: Create a new jone & section with name."
+      echo "  j-- [<NAME>]: Create a new jone & section and move to the section in the jone NAME."
       echo "  j- [<NAME>]: Move to the latest section in the jone NAME."
       echo "  j_ [<NAME>]: List of sections in the jone NAME."
       echo "  j. [<NAME>]: Open the note file of the latest section in the jone "
@@ -136,12 +137,16 @@ j() {
     J cd $@
   fi
 }
-j--() {
+j-+() {
   J jone-new $@
 }
 j-() {
   p="$($__J2 jone-latest $@)"
   cd "$p"
+}
+j--() {
+  j-+ $@
+  j- $@
 }
 j_() {
   J jone-sections $@
@@ -151,6 +156,7 @@ j.() {
 }
 complete -W "version find cd pushd clone jone-new jone-list jone-sections jone-note" J
 complete -F __J2_LIST "j--"
+complete -F __J2_LIST "j-+"
 complete -F __J2_LIST "j-"
 complete -F __J2_LIST "j_"
 complete -F __J2_LIST "j."
