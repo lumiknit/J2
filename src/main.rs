@@ -1,6 +1,6 @@
 /* luminkit's jump helper 2
  * Author: lumiknit (aasr4r4@gmail.com)
- * Version: 0.1.1 (230827)
+ * Version: 0.2.0-dev (240216)
  */
 
 use std::{env, fs, path, vec};
