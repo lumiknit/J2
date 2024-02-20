@@ -3,6 +3,7 @@
  * Version: 0.2.0-dev (240216)
  */
 
+use std::io::{self, stdout};
 use std::process::{exit, Command};
 use std::{env, fs, path, vec};
 
@@ -12,6 +13,13 @@ pub mod section;
 pub mod sh_init;
 
 use config::Config;
+use crossterm::terminal::{
+  disable_raw_mode, enable_raw_mode, EnterAlternateScreen,
+};
+use crossterm::{event, ExecutableCommand};
+use ratatui::backend::CrosstermBackend;
+use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::{Frame, Terminal};
 use section::JoneSection;
 
 fn get_executable_path(exe: &str) -> Option<String> {
@@ -146,6 +154,74 @@ fn find_path(config: &Config, search: &str) -> Vec<String> {
   result.iter().map(|d| d.path.clone()).collect()
 }
 
+fn gather_all_paths(all: bool) -> Vec<String> {
+  let config = Config::from_env();
+
+  // Traverse all directories and gather paths
+  let mut paths = std::sync::Mutex::new(vec![]);
+
+  for base in config.find_base_paths.iter() {
+    let mut builder = ignore::WalkBuilder::new(base);
+    builder.standard_filters(true).hidden(!all);
+    builder.build_parallel().run(|| {
+      Box::new(|result| {
+        if let Ok(entry) = result {
+          let path = entry.path();
+          if path.is_dir() {
+            let mut paths = paths.lock().unwrap();
+            paths.push(path.to_str().unwrap().to_string());
+          }
+        }
+        ignore::WalkState::Continue
+      })
+    });
+  }
+
+  // Destruct paths from mutex wrapper
+  paths.into_inner().unwrap()
+}
+
+fn cmd_find_first(paths: &Vec<String>, query: &String) {}
+
+fn find_ui(frame: &mut Frame) {
+  frame.render_widget(
+    Paragraph::new("Find:").block(Block::default().borders(Borders::ALL)),
+    frame.size(),
+  );
+}
+
+fn find_handle_events() -> io::Result<bool> {
+  if event::poll(std::time::Duration::from_millis(50))? {
+    match event::read()? {
+      event::Event::Key(event) => {
+        if event.kind == event::KeyEventKind::Press
+          && event.code == event::KeyCode::Char('q')
+        {
+          return Ok(true);
+        }
+      }
+      _ => {}
+    }
+  }
+  Ok(false)
+}
+
+fn cmd_find_interactively(
+  paths: &Vec<String>,
+  query: &String,
+) -> io::Result<()> {
+  enable_raw_mode()?;
+  stdout().execute(EnterAlternateScreen)?;
+  let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+  let mut should_quit = false;
+  while !should_quit {
+    terminal.draw(find_ui)?;
+    should_quit = find_handle_events()?;
+  }
+  disable_raw_mode()?;
+  Ok(())
+}
+
 fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
   // Split repo_url by protocal
   let url_clone = repo_url;
@@ -167,12 +243,9 @@ fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
     .arg(repo_url)
     .arg(format!("{}/{}", config.repos_path, splitted[1]));
   if let Some(d) = depth {
-  	cmd = cmd.arg(format!("--depth={}", d));
+    cmd = cmd.arg(format!("--depth={}", d));
   }
-  cmd.spawn()
-    .expect("Failed to clone repo")
-    .wait()
-    .unwrap();
+  cmd.spawn().expect("Failed to clone repo").wait().unwrap();
 }
 
 fn jone_list(config: &Config) {
@@ -251,21 +324,6 @@ fn jone_section_list(config: &Config, name: &str) -> vec::Vec<JoneSection> {
   list
 }
 
-fn run(args: Vec<String>) {
-  let l = args.len();
-  match args[1].as_str() {
-    "find" => {
-      let config = Config::from_env();
-      let query = args[2..].join("").to_lowercase();
-      let result = find_path(&config, query.as_str());
-      for path in result {
-        println!("{}", path);
-      }
-    }
-    _ => unreachable!(),
-  }
-}
-
 fn cmd_shell_init() {
   // Get args
   let args: Vec<String> = env::args().collect();
@@ -275,8 +333,8 @@ fn cmd_shell_init() {
 }
 
 fn cmd_clone(url: &String, depth: Option<u32>) {
-	let config = Config::from_env();
-	clone(&config, url, depth);
+  let config = Config::from_env();
+  clone(&config, url, depth);
 }
 
 fn cmd_jone_new(name: &String) {
@@ -309,8 +367,8 @@ fn cmd_jone_latest(name: &String) {
   }
 }
 
-fn name_list_to_string(name: &Vec<String>) -> String {
-  let joined = name.join(" ");
+fn name_list_to_string(name: &Vec<String>, delimiter: &str) -> String {
+  let joined = name.join(delimiter);
   let trimmed = joined.trim();
   if trimmed.len() <= 0 {
     EMPTY_JONE_NAME.to_string()
@@ -324,17 +382,25 @@ fn main() {
   let parsed_command = cli::parse_command();
   match parsed_command.command {
     cli::Command::ShellInit => cmd_shell_init(),
-    cli::Command::Clone {
-    	url, depth } => cmd_clone(&url, depth),
+    cli::Command::Find { query, first, all } => {
+      let paths = gather_all_paths(all);
+      let query = name_list_to_string(&query, "");
+      if first {
+        cmd_find_first(&paths, &query);
+      } else {
+        cmd_find_interactively(&paths, &query);
+      }
+    }
+    cli::Command::Clone { url, depth } => cmd_clone(&url, depth),
     cli::Command::JoneList => cmd_jone_list(),
     cli::Command::JoneNew { name } => {
-      cmd_jone_new(&name_list_to_string(&name));
+      cmd_jone_new(&name_list_to_string(&name, " "));
     }
     cli::Command::JoneSections { name } => {
-      cmd_jone_section_list(&name_list_to_string(&name));
+      cmd_jone_section_list(&name_list_to_string(&name, " "));
     }
     cli::Command::JoneLatest { name } => {
-      cmd_jone_latest(&name_list_to_string(&name));
+      cmd_jone_latest(&name_list_to_string(&name, " "));
     }
     _ => unimplemented!(),
   }

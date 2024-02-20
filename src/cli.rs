@@ -13,6 +13,10 @@ pub enum Command {
     /// Without GUI, just pick the first match
     #[clap(short, long)]
     first: bool,
+
+    /// Find all hidden files
+    #[clap(short, long)]
+    all: bool,
   },
 
   #[clap(about = "Clone a repository")]
