@@ -3,23 +3,17 @@
  * Version: 0.2.0-dev (240216)
  */
 
-use std::io::{self, stdout};
 use std::process::{exit, Command};
 use std::{env, fs, path, vec};
 
 pub mod cli;
 pub mod config;
+pub mod fuzzy;
 pub mod section;
 pub mod sh_init;
+pub mod ui_finder;
 
 use config::Config;
-use crossterm::terminal::{
-  disable_raw_mode, enable_raw_mode, EnterAlternateScreen,
-};
-use crossterm::{event, ExecutableCommand};
-use ratatui::backend::CrosstermBackend;
-use ratatui::widgets::{Block, Borders, Paragraph};
-use ratatui::{Frame, Terminal};
 use section::JoneSection;
 
 fn get_executable_path(exe: &str) -> Option<String> {
@@ -30,135 +24,11 @@ fn get_executable_path(exe: &str) -> Option<String> {
     .and_then(|p| p.to_str().map(|s| s.to_string()))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Dir {
-  path: String,
-  name: String,
-  loss: u32,
-}
-
-fn edit_distance(path: &str, query: &str) -> u32 {
-  let p = path.as_bytes();
-  let q = query.as_bytes();
-  let mut d = vec![vec![0; p.len()]; 2];
-  for i in 0..p.len() {
-    d[1][i] = 0 as u32;
-  }
-  for i in 0..q.len() {
-    let qc = q[i];
-    let qp = if i == 0 { 1 } else { q[i - 1] };
-    for j in 0..p.len() {
-      let pc = p[j];
-      let pp = if j == 0 { 0 } else { p[j - 1] };
-      let mut costs = vec![0];
-      if qc == pc {
-        if j == 0 {
-          costs.push(200);
-        } else {
-          costs.push(d[(i + 1) % 2][j - 1] + if qp == pp { 200 } else { 100 });
-        }
-      }
-      d[i % 2][j] = *costs.iter().max().unwrap();
-    }
-  }
-  d[(q.len() + 1) % 2].iter().max().unwrap_or(&0).clone() + 4096
-    - (p.len() as u32)
-}
-
-fn gather_directories(
-  config: &Config,
-  result: &mut Vec<Dir>,
-  root: &str,
-  original_query: &str,
-  query: &str,
-  dir: &path::Path,
-) {
-  if !dir.is_dir() {
-    return;
-  }
-  let filename = dir.file_name().unwrap().to_str().unwrap();
-  if config.ignores.contains(&filename.to_string()) {
-    return;
-  }
-  let path_name = filename.to_lowercase();
-  let mut query_chars = query.char_indices().peekable();
-  let p = query_chars.peek();
-  if p.is_some() && p.unwrap().1 == '/' {
-    query_chars.next();
-  }
-  for c in path_name.chars() {
-    if let Some(qc) = query_chars.peek() {
-      if c == qc.1 {
-        query_chars.next();
-      }
-    }
-  }
-  if query_chars.peek().is_none() {
-    // Found!
-    let path = dir.to_str().unwrap();
-    result.push(Dir {
-      path: path.to_string(),
-      name: filename.to_string(),
-      loss: edit_distance(
-        path.strip_prefix(root).unwrap_or(path),
-        original_query,
-      ),
-    });
-  } else {
-    let new_query = &query[query_chars.peek().unwrap().0..];
-    // Find recursively
-    if let Ok(entries) = dir.read_dir() {
-      // Check directory contains .git
-      let mut has_git = false;
-      for entry in dir.read_dir().unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let file_name = path.file_name();
-        if file_name.is_some() && file_name.unwrap().to_str().unwrap() == ".git"
-        {
-          has_git = true;
-          break;
-        }
-      }
-      if has_git {
-        return;
-      }
-      for entry in entries {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let file_name = path.file_name();
-        let hidden = file_name.is_some()
-          && file_name.unwrap().to_str().unwrap().starts_with(".");
-        if path.is_dir() && !hidden {
-          gather_directories(
-            config,
-            result,
-            root,
-            original_query,
-            new_query,
-            &path,
-          );
-        }
-      }
-    }
-  }
-}
-
-fn find_path(config: &Config, search: &str) -> Vec<String> {
-  let mut result: Vec<Dir> = vec![];
-  for base_path in &config.find_base_paths {
-    let path = path::Path::new(base_path);
-    gather_directories(config, &mut result, base_path, search, search, path);
-  }
-  result.sort_by(|a, b| b.loss.cmp(&a.loss));
-  result.iter().map(|d| d.path.clone()).collect()
-}
-
 fn gather_all_paths(all: bool) -> Vec<String> {
   let config = Config::from_env();
 
   // Traverse all directories and gather paths
-  let mut paths = std::sync::Mutex::new(vec![]);
+  let paths = std::sync::Mutex::new(vec![]);
 
   for base in config.find_base_paths.iter() {
     let mut builder = ignore::WalkBuilder::new(base);
@@ -181,45 +51,13 @@ fn gather_all_paths(all: bool) -> Vec<String> {
   paths.into_inner().unwrap()
 }
 
-fn cmd_find_first(paths: &Vec<String>, query: &String) {}
+fn cmd_find_first(_paths: &Vec<String>, _query: &String) {}
 
-fn find_ui(frame: &mut Frame) {
-  frame.render_widget(
-    Paragraph::new("Find:").block(Block::default().borders(Borders::ALL)),
-    frame.size(),
-  );
-}
-
-fn find_handle_events() -> io::Result<bool> {
-  if event::poll(std::time::Duration::from_millis(50))? {
-    match event::read()? {
-      event::Event::Key(event) => {
-        if event.kind == event::KeyEventKind::Press
-          && event.code == event::KeyCode::Char('q')
-        {
-          return Ok(true);
-        }
-      }
-      _ => {}
-    }
+fn cmd_find_interactively(paths: &Vec<String>, query: &String) {
+  let result = ui_finder::run(paths.clone(), query.clone());
+  if let Some(result) = result {
+    println!("{}", result);
   }
-  Ok(false)
-}
-
-fn cmd_find_interactively(
-  paths: &Vec<String>,
-  query: &String,
-) -> io::Result<()> {
-  enable_raw_mode()?;
-  stdout().execute(EnterAlternateScreen)?;
-  let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-  let mut should_quit = false;
-  while !should_quit {
-    terminal.draw(find_ui)?;
-    should_quit = find_handle_events()?;
-  }
-  disable_raw_mode()?;
-  Ok(())
 }
 
 fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
@@ -402,6 +240,5 @@ fn main() {
     cli::Command::JoneLatest { name } => {
       cmd_jone_latest(&name_list_to_string(&name, " "));
     }
-    _ => unimplemented!(),
   }
 }
