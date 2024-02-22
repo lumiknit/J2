@@ -222,7 +222,7 @@ fn main() {
     cli::Command::ShellInit => cmd_shell_init(),
     cli::Command::Find { query, first, all } => {
       let paths = gather_all_paths(all);
-      let query = name_list_to_string(&query, "");
+      let query = query.join("");
       if first {
         cmd_find_first(&paths, &query);
       } else {

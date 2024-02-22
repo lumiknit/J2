@@ -401,6 +401,7 @@ dependencies = [
  "ignore",
  "rand",
  "ratatui",
+ "unicode-width",
 ]
 
 [[package]]
