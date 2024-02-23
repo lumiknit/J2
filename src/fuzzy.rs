@@ -35,7 +35,8 @@ impl EditDist {
   pub fn run(&mut self, target: &String) -> Option<u32> {
     // If the query is empty, just return inverse of length
     if self.q.is_empty() {
-      return Some(u32::MAX.saturating_sub(self.q.len() as u32));
+      // Then length is a cost
+      return Some(target.len() as u32);
     }
 
     // Convert target string into chars
