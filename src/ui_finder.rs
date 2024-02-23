@@ -34,6 +34,7 @@ struct State {
   list: Vec<String>,
   query: Vec<char>,
 
+  query_lower: Vec<char>,
   unfiltered_count: usize,
   filtered: BTreeMap<FilteredKey, usize>,
 
@@ -64,6 +65,7 @@ impl State {
       list,
       query,
 
+      query_lower: vec![],
       unfiltered_count,
       filtered: BTreeMap::new(),
 
@@ -125,6 +127,8 @@ impl State {
   }
 
   fn clear_filtered(&mut self) {
+    self.query_lower =
+      self.query.iter().map(|c| c.to_ascii_lowercase()).collect();
     self.filtered.clear();
     self.unfiltered_count = self.list.len();
     self.need_to_redraw = true;
@@ -132,14 +136,15 @@ impl State {
 
   fn filter_slightly(&mut self, duration: Duration) {
     // Get now to check duration
+    let mut ed = fuzzy::EditDist::new(&mut self.query_lower);
     let now = std::time::Instant::now();
     while now.elapsed() < duration && self.unfiltered_count > 0 {
       let idx = self.unfiltered_count - 1;
       let item = &self.list[idx];
 
       // Calculate score
-      if fuzzy::contained_in(&self.query, item) {
-        let score = -(fuzzy::edit_distance(&self.query, item) as isize);
+      if ed.contained_in(item) {
+        let score = -(ed.run(item) as isize);
         self.filtered.insert(FilteredKey { score, index: idx }, idx);
       }
 
@@ -226,12 +231,10 @@ fn draw_ui(f: &mut Frame, s: &mut State) {
 
   {
     // Draw border
-    let title = format!(
-      "u:{} f:{} l:{}",
-      s.unfiltered_count,
-      s.filtered.len(),
-      s.list.len()
-    );
+    let mut title = format!(" {}/{} ", s.filtered.len(), s.list.len());
+    if s.unfiltered_count > 0 {
+      title.push_str(format!("({} left) ", s.unfiltered_count).as_str());
+    }
     let block = Block::default().borders(Borders::TOP).title(title);
     f.render_widget(block, bd_area);
   }
@@ -274,7 +277,7 @@ fn run_ui(s: &mut State) -> io::Result<String> {
       s.need_to_redraw = false;
     }
 
-    if true == event::poll(Duration::from_millis(25))? {
+    while true == event::poll(Duration::from_millis(25))? {
       handle_event_ui(s, event::read()?);
     }
 

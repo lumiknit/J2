@@ -1,45 +1,74 @@
-pub fn contained_in(query: &Vec<char>, target: &String) -> bool {
-  if query.is_empty() {
-    return true;
-  }
-  // Check if the query is contained in the target in linear time
-  let mut q_iter = query.iter().peekable();
-  for c in target.chars() {
-    if let Some(&q) = q_iter.peek() {
-      if c.to_ascii_lowercase() == (*q).to_ascii_lowercase() {
-        q_iter.next();
-      }
-    } else {
-      return true;
-    }
-  }
-  q_iter.peek().is_none()
+pub struct EditDist<'a> {
+  q: &'a Vec<char>,
+  d: [Vec<i32>; 2],
 }
 
-pub fn edit_distance(q: &Vec<char>, target: &String) -> u32 {
-  let q: Vec<char> = q.iter().map(|c| c.to_ascii_lowercase()).collect();
-  let p: Vec<char> = target.chars().map(|c| c.to_ascii_lowercase()).collect();
-  let mut d = vec![vec![0; p.len()]; 2];
-  for i in 0..p.len() {
-    d[1][i] = 0 as u32;
-  }
-  for i in 0..q.len() {
-    let qc = q[i];
-    let qp = if i == 0 { '\x00' } else { q[i - 1] };
-    for j in 0..p.len() {
-      let pc = p[j];
-      let pp = if j == 0 { '\x01' } else { p[j - 1] };
-      let mut costs = vec![0];
-      if qc == pc {
-        if j == 0 {
-          costs.push(200);
-        } else {
-          costs.push(d[(i + 1) % 2][j - 1] + if qp == pp { 200 } else { 100 });
-        }
-      }
-      d[i % 2][j] = *costs.iter().max().unwrap();
+impl<'a> EditDist<'a> {
+  pub fn new(q: &'a Vec<char>) -> Self {
+    let l = q.len();
+    Self {
+      q,
+      d: [vec![0; l], vec![0; l]],
     }
   }
-  d[(q.len() + 1) % 2].iter().max().unwrap_or(&0).clone() + 4096
-    - (p.len() as u32)
+
+  pub fn contained_in(&self, target: &String) -> bool {
+    if self.q.is_empty() {
+      return true;
+    }
+    // Check if the query is contained in the target in linear time
+    let mut q_iter = self.q.iter();
+    let mut q = *q_iter.next().unwrap();
+    for c in target.chars() {
+      if c.to_ascii_lowercase() == q {
+        if let Some(n) = q_iter.next() {
+          q = *n;
+        } else {
+          return true;
+        }
+      }
+    }
+    false
+  }
+
+  fn is_ascii_sep(c: char) -> bool {
+    ('\x00' <= c && c < '0')
+      || ('9' < c && c < 'A')
+      || ('Z' < c && c < 'a')
+      || ('z' < c && c < '\x7f')
+  }
+
+  pub fn run(&mut self, target: &String) -> i32 {
+    for i in 0..self.q.len() {
+      self.d[1][i] = 0;
+    }
+    let mut pp = '\x00';
+    let mut i = 0;
+    for (idx, pc) in target.chars().map(|c| c.to_ascii_lowercase()).enumerate()
+    {
+      let after_sep = Self::is_ascii_sep(pc);
+      i = idx % 2;
+      let mut qp = '\x01';
+      for (j, &qc) in self.q.iter().enumerate() {
+        let mut cost = 0;
+        if qc == pc {
+          if j == 0 {
+            cost = cost.max(50);
+          } else {
+            if qp == pp {
+              cost = cost.max(self.d[1 - i][j - 1] + 200);
+            } else if after_sep {
+              cost = cost.max(self.d[1 - i][j - 1] + 150);
+            } else {
+              cost = cost.max(self.d[1 - i][j - 1] + 50);
+            }
+          }
+        }
+        self.d[i][j] = cost;
+        qp = qc;
+      }
+      pp = pc;
+    }
+    self.d[i].iter().max().unwrap_or(&0).clone() - target.len() as i32
+  }
 }
