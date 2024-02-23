@@ -10,11 +10,20 @@ pub enum Command {
     /// Query string
     query: Vec<String>,
 
-    /// Without GUI, just pick the first match
+    /// Base paths to search.
+    /// If not specified, use J2_FIND_BASE_PATHS
     #[clap(short, long)]
+    base: Vec<String>,
+
+    /// Without GUI, just pick the first match
+    #[clap(short = '1', long)]
     first: bool,
 
-    /// Find all hidden files
+    /// Allow (non-directory) files to be included
+    #[clap(short, long)]
+    files: bool,
+
+    /// Allow hidden files to be included
     #[clap(short, long)]
     all: bool,
   },

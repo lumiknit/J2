@@ -20,7 +20,7 @@ use crate::fuzzy;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
 struct FilteredKey {
-  score: isize,
+  cost: u32,
   index: usize,
 }
 
@@ -34,13 +34,14 @@ struct State {
   list: Vec<String>,
   query: Vec<char>,
 
-  query_lower: Vec<char>,
+  ed: fuzzy::EditDist,
   unfiltered_count: usize,
   filtered: BTreeMap<FilteredKey, usize>,
 
   // Editing status
   cursor: usize,
   ui_cursor: usize,
+  query_string: String,
 
   // List status
   list_items: Vec<String>,
@@ -57,6 +58,8 @@ impl State {
     let ui_cursor = query
       .iter()
       .fold(0, |a, c| a + UnicodeWidthChar::width(*c).unwrap_or(0));
+    let mut ed = fuzzy::EditDist::new();
+    ed.update_query(&query);
     Self {
       quit: false,
       ret: None,
@@ -65,12 +68,13 @@ impl State {
       list,
       query,
 
-      query_lower: vec![],
+      ed,
       unfiltered_count,
       filtered: BTreeMap::new(),
 
       cursor,
       ui_cursor,
+      query_string: init_query,
 
       list_items,
       list_state,
@@ -122,13 +126,9 @@ impl State {
     self.clear_filtered();
   }
 
-  fn query_string(&self) -> String {
-    self.query.iter().collect()
-  }
-
   fn clear_filtered(&mut self) {
-    self.query_lower =
-      self.query.iter().map(|c| c.to_ascii_lowercase()).collect();
+    self.query_string = self.query.iter().collect();
+    self.ed.update_query(&self.query);
     self.filtered.clear();
     self.unfiltered_count = self.list.len();
     self.need_to_redraw = true;
@@ -136,16 +136,14 @@ impl State {
 
   fn filter_slightly(&mut self, duration: Duration) {
     // Get now to check duration
-    let mut ed = fuzzy::EditDist::new(&mut self.query_lower);
     let now = std::time::Instant::now();
     while now.elapsed() < duration && self.unfiltered_count > 0 {
       let idx = self.unfiltered_count - 1;
       let item = &self.list[idx];
 
-      // Calculate score
-      if ed.contained_in(item) {
-        let score = -(ed.run(item) as isize);
-        self.filtered.insert(FilteredKey { score, index: idx }, idx);
+      // Calculate cost
+      if let Some(cost) = self.ed.run(item) {
+        self.filtered.insert(FilteredKey { cost, index: idx }, idx);
       }
 
       self.unfiltered_count -= 1;
@@ -220,7 +218,7 @@ fn draw_ui(f: &mut Frame, s: &mut State) {
     f.render_widget(prompt, prompt_area);
 
     // Draw query
-    let input = Paragraph::new(s.query_string())
+    let input = Paragraph::new(s.query_string.as_str())
       .style(Style::default())
       .block(Block::default());
     f.render_widget(input, query_area);
@@ -277,11 +275,11 @@ fn run_ui(s: &mut State) -> io::Result<String> {
       s.need_to_redraw = false;
     }
 
-    while true == event::poll(Duration::from_millis(25))? {
+    while event::poll(Duration::from_millis(35))? {
       handle_event_ui(s, event::read()?);
     }
 
-    s.filter_slightly(Duration::from_millis(5));
+    s.filter_slightly(Duration::from_millis(15));
   }
 
   stderr().execute(LeaveAlternateScreen)?;

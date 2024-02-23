@@ -24,20 +24,30 @@ fn get_executable_path(exe: &str) -> Option<String> {
     .and_then(|p| p.to_str().map(|s| s.to_string()))
 }
 
-fn gather_all_paths(all: bool) -> Vec<String> {
+fn gather_all_paths(base: Vec<String>, files: bool, all: bool) -> Vec<String> {
   let config = Config::from_env();
+
+  let base_paths = if base.is_empty() {
+    config.find_base_paths.clone()
+  } else {
+    base
+      .iter()
+      .map(|s| s.split(":").map(|s| s.to_string()))
+      .flatten()
+      .collect()
+  };
 
   // Traverse all directories and gather paths
   let paths = std::sync::Mutex::new(vec![]);
 
-  for base in config.find_base_paths.iter() {
+  for base in base_paths.iter() {
     let mut builder = ignore::WalkBuilder::new(base);
     builder.standard_filters(true).hidden(!all);
     builder.build_parallel().run(|| {
       Box::new(|result| {
         if let Ok(entry) = result {
           let path = entry.path();
-          if path.is_dir() {
+          if path.is_dir() || files {
             let mut paths = paths.lock().unwrap();
             paths.push(path.to_str().unwrap().to_string());
           }
@@ -51,12 +61,32 @@ fn gather_all_paths(all: bool) -> Vec<String> {
   paths.into_inner().unwrap()
 }
 
-fn cmd_find_first(_paths: &Vec<String>, _query: &String) {}
+fn cmd_find_first(paths: &Vec<String>, query: &String) {
+  let mut ed = fuzzy::EditDist::new();
+  ed.update_query(&query.chars().collect());
+  let mut min_dist = std::u32::MAX;
+  let mut min_path = None;
+  for path in paths {
+    if let Some(cost) = ed.run(path) {
+      if cost < min_dist {
+        min_dist = cost;
+        min_path = Some(path);
+      }
+    }
+  }
+  if let Some(min_path) = min_path {
+    println!("{}", min_path);
+  } else {
+    exit(1);
+  }
+}
 
 fn cmd_find_interactively(paths: &Vec<String>, query: &String) {
   let result = ui_finder::run(paths.clone(), query.clone());
   if let Some(result) = result {
     println!("{}", result);
+  } else {
+    exit(1);
   }
 }
 
@@ -220,8 +250,14 @@ fn main() {
   let parsed_command = cli::parse_command();
   match parsed_command.command {
     cli::Command::ShellInit => cmd_shell_init(),
-    cli::Command::Find { query, first, all } => {
-      let paths = gather_all_paths(all);
+    cli::Command::Find {
+      query,
+      base,
+      first,
+      files,
+      all,
+    } => {
+      let paths = gather_all_paths(base, files, all);
       let query = query.join("");
       if first {
         cmd_find_first(&paths, &query);
