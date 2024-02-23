@@ -43,6 +43,11 @@ fn gather_all_paths(base: Vec<String>, files: bool, all: bool) -> Vec<String> {
   for base in base_paths.iter() {
     let mut builder = ignore::WalkBuilder::new(base);
     builder.standard_filters(true).hidden(!all);
+    if let Some(p) = &config.ignore_file_path {
+			if let Some(_err) = builder.add_ignore(p) {
+				// eprintln!("Error to load ignore file({})\n{}", p, _err);
+			}
+    }
     builder.build_parallel().run(|| {
       Box::new(|result| {
         if let Ok(entry) = result {

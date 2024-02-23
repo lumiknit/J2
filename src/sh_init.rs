@@ -5,11 +5,11 @@ pub static SH_INIT: &str = r#"
 if [ -z "$HOME" ]; then
   export HOME=~
 fi
-if [ -z "$J2_IGNORES" ]; then
-  export J2_IGNORES="node_modules:target:dist:venv:env:build:out:output:bin:obj:lib:libs:include:includes:vendor:assets:resources:res:tmp:test:tests"
+if [ -z "$J2_IGNORE" ]; then
+  export J2_IGNORE="$HOME/.J2_ignore"
 fi
 if [ -z "$J2_JONE_PATH" ]; then
-  export J2_JONE_PATH="$HOME/.J2-jones"
+  export J2_JONE_PATH="$HOME/.J2_jones"
 fi
 if [ -z "$J2_EDITOR" ]; then
   export J2_EDITOR="vi"
