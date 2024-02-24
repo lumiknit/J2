@@ -161,6 +161,8 @@ fn handle_event_ui(s: &mut State, e: Event) {
       KeyCode::Right => s.move_cursor(1),
       KeyCode::Up => s.move_selected_item(1),
       KeyCode::Down => s.move_selected_item(-1),
+      KeyCode::Home => s.move_cursor(-1000),
+      KeyCode::End => s.move_cursor(1000),
       KeyCode::Enter => {
         if let Some(selected) = s.list_state.selected() {
           s.ret = s
