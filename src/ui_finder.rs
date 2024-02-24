@@ -17,6 +17,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use unicode_width::UnicodeWidthChar;
 
 use crate::fuzzy;
+use crate::path::{self, PathItem};
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
 struct FilteredKey {
@@ -31,7 +32,7 @@ struct State {
   need_to_redraw: bool,
 
   // Fuzzy finder status
-  list: Vec<String>,
+  list: Vec<PathItem>,
   query: Vec<char>,
 
   ed: fuzzy::EditDist,
@@ -49,9 +50,9 @@ struct State {
 }
 
 impl State {
-  fn new(list: Vec<String>, init_query: String) -> Self {
+  fn new(list: Vec<path::PathItem>, init_query: &String) -> Self {
     let cursor = init_query.len();
-    let list_items = list.iter().map(|s| s.clone()).collect();
+    let list_items = list.iter().map(|s| s.displayed.clone()).collect();
     let list_state = ListState::default();
     let query: Vec<char> = init_query.chars().collect();
     let unfiltered_count = list.len();
@@ -74,7 +75,7 @@ impl State {
 
       cursor,
       ui_cursor,
-      query_string: init_query,
+      query_string: init_query.clone(),
 
       list_items,
       list_state,
@@ -142,7 +143,7 @@ impl State {
       let item = &self.list[idx];
 
       // Calculate cost
-      if let Some(cost) = self.ed.run(item) {
+      if let Some(cost) = self.ed.run(&item.displayed) {
         self.filtered.insert(FilteredKey { cost, index: idx }, idx);
       }
 
@@ -169,7 +170,7 @@ fn handle_event_ui(s: &mut State, e: Event) {
             .filtered
             .iter()
             .nth(selected)
-            .map(|(_, idx)| s.list[*idx].clone());
+            .map(|(_, idx)| s.list[*idx].abs.clone());
           s.quit = true;
         }
       }
@@ -289,7 +290,7 @@ fn run_ui(s: &mut State) -> io::Result<String> {
   Ok(s.ret.clone().unwrap_or("".to_string()))
 }
 
-pub fn run(list: Vec<String>, init_query: String) -> Option<String> {
+pub fn run(list: Vec<path::PathItem>, init_query: &String) -> Option<String> {
   let mut s = State::new(list, init_query);
   run_ui(&mut s).ok().filter(|s| !s.is_empty())
 }

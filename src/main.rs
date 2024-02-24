@@ -4,28 +4,34 @@
  */
 
 use std::process::{exit, Command};
-use std::{env, fs, path, vec};
+use std::{env, fs, vec};
 
 pub mod cli;
 pub mod config;
 pub mod fuzzy;
+pub mod path;
 pub mod section;
 pub mod sh_init;
 pub mod ui_finder;
 
 use clap::Parser;
 use config::Config;
+use path::PathItem;
 use section::JoneSection;
 
 fn get_executable_path(exe: &str) -> Option<String> {
   // Convert relative path to absolute path
-  path::Path::new(exe)
+  std::path::Path::new(exe)
     .canonicalize()
     .ok()
     .and_then(|p| p.to_str().map(|s| s.to_string()))
 }
 
-fn gather_all_paths(base: Vec<String>, files: bool, all: bool) -> Vec<String> {
+fn gather_all_paths(
+  base: Vec<String>,
+  files: bool,
+  all: bool,
+) -> Vec<path::PathItem> {
   let config = Config::from_env();
 
   let base_paths = if base.is_empty() {
@@ -38,11 +44,14 @@ fn gather_all_paths(base: Vec<String>, files: bool, all: bool) -> Vec<String> {
       .collect()
   };
 
+  // Convert base paths to names
+  let base_paths = path::convert_base_paths_to_names(&base_paths);
+
   // Traverse all directories and gather paths
   let paths = std::sync::Mutex::new(vec![]);
 
-  for base in base_paths.iter() {
-    let mut builder = ignore::WalkBuilder::new(base);
+  for base in base_paths.into_iter() {
+    let mut builder = ignore::WalkBuilder::new(base.abs.clone());
     builder.standard_filters(true).hidden(!all);
     if let Some(p) = &config.ignore_file_path {
       if let Some(_err) = builder.add_ignore(p) {
@@ -55,7 +64,13 @@ fn gather_all_paths(base: Vec<String>, files: bool, all: bool) -> Vec<String> {
           let path = entry.path();
           if path.is_dir() || files {
             let mut paths = paths.lock().unwrap();
-            paths.push(path.to_str().unwrap().to_string());
+            let abs = path.to_str().unwrap().to_string();
+            let displayed = if path.starts_with(&base.abs) {
+              base.displayed.clone() + ": " + &abs[base.abs.len()..].to_string()
+            } else {
+              abs.clone()
+            };
+            paths.push(PathItem { displayed, abs });
           }
         }
         ignore::WalkState::Continue
@@ -67,13 +82,13 @@ fn gather_all_paths(base: Vec<String>, files: bool, all: bool) -> Vec<String> {
   paths.into_inner().unwrap()
 }
 
-fn cmd_find_first(paths: &Vec<String>, query: &String) {
+fn cmd_find_first(paths: &Vec<path::PathItem>, query: &String) {
   let mut ed = fuzzy::EditDist::new();
   ed.update_query(&query.chars().collect());
   let mut min_dist = std::u32::MAX;
   let mut min_path = None;
   for path in paths {
-    if let Some(cost) = ed.run(path) {
+    if let Some(cost) = ed.run(&path.displayed) {
       if cost < min_dist {
         min_dist = cost;
         min_path = Some(path);
@@ -81,14 +96,14 @@ fn cmd_find_first(paths: &Vec<String>, query: &String) {
     }
   }
   if let Some(min_path) = min_path {
-    println!("{}", min_path);
+    println!("{}", min_path.abs);
   } else {
     exit(1);
   }
 }
 
-fn cmd_find_interactively(paths: &Vec<String>, query: &String) {
-  let result = ui_finder::run(paths.clone(), query.clone());
+fn cmd_find_interactively(paths: &Vec<path::PathItem>, query: &String) {
+  let result = ui_finder::run(paths.to_vec(), query);
   if let Some(result) = result {
     println!("{}", result);
   } else {
@@ -105,7 +120,7 @@ fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
     exit(1)
   }
   // Mkdir
-  fs::create_dir_all(path::Path::new(&format!(
+  fs::create_dir_all(std::path::Path::new(&format!(
     "{}/{}",
     config.repos_path, splitted[1]
   )))
@@ -124,7 +139,7 @@ fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
 
 fn jone_list(config: &Config) {
   // Read jone directories
-  let path = path::Path::new(&config.jones_path);
+  let path = std::path::Path::new(&config.jones_path);
   if let Ok(entries) = path.read_dir() {
     for entry in entries {
       let file_name = entry.ok().and_then(|e| e.file_name().into_string().ok());
@@ -163,7 +178,7 @@ fn jone_new(config: &Config, name: &str) -> String {
   // Create jone file
   let section_name = JoneSection::gen().to_base10();
   let section_path = format!("{}/{}", jone_path, section_name);
-  fs::create_dir(path::Path::new(&section_path))
+  fs::create_dir(std::path::Path::new(&section_path))
     .expect("Failed to create directory");
   section_path
 }
@@ -172,7 +187,7 @@ fn jone_section_list(config: &Config, name: &str) -> vec::Vec<JoneSection> {
   let name = canonicalize_jone_name(name);
   let jone_path = format!("{}/{}", config.jones_path, name);
   // Read jone directories
-  let path = path::Path::new(&jone_path);
+  let path = std::path::Path::new(&jone_path);
   let entries = path.read_dir();
   if entries.is_err() {
     return vec![];
