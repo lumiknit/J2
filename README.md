@@ -104,7 +104,9 @@ There are commands to create and use jones:
 and shortcuts:
 
 - `j--`: Equivalent to `J jone-new`.
+  - `j--!`: Run `J jone-new` and open editor in the new section.
 - `j-`: Cd to the latest section of jone with the given tag.
+  - `j-!`: Open editor in the latest section.
 - `j_`: Equivalent to `J jone-sections`.
 - `j.`: Equivalent to `J jone-note`.
 
