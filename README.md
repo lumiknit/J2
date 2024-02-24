@@ -4,7 +4,7 @@
 
 lumiknit's jump helper, the second edition.
 
-!(preview)[./preview.webp]
+![preview](./preview.webp)
 
 ## Features
 
