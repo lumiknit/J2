@@ -1,15 +1,24 @@
 [package]
 name = "j2"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
+authors = ["lumiknit <aasr4r4@gmail.com>"]
+description = "lumiknit's Jump Utility"
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 chrono = "0.4"
 rand = "0.8"
+clap = { version = "4.3", features = ["derive"] }
+ratatui = "0.26.1"
+crossterm = "0.27.0"
+ignore = "0.4.22"
+unicode-width = "0.1.11"
 
 [profile.release]
+opt-level=3
 strip = true
 lto = true
 codegen-units = 1

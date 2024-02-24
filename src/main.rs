@@ -1,20 +1,21 @@
 /* luminkit's jump helper 2
  * Author: lumiknit (aasr4r4@gmail.com)
- * Version: 0.1.1 (230827)
+ * Version: 0.2.0 (240224)
  */
 
-use std::{env, fs, path, vec};
 use std::process::{exit, Command};
+use std::{env, fs, path, vec};
 
+pub mod cli;
 pub mod config;
+pub mod fuzzy;
 pub mod section;
 pub mod sh_init;
-pub mod help_msg;
+pub mod ui_finder;
 
+use clap::Parser;
 use config::Config;
 use section::JoneSection;
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn get_executable_path(exe: &str) -> Option<String> {
   // Convert relative path to absolute path
@@ -24,136 +25,80 @@ fn get_executable_path(exe: &str) -> Option<String> {
     .and_then(|p| p.to_str().map(|s| s.to_string()))
 }
 
-fn print_version() {
-  println!("lumiknit's jump helper v{}", VERSION);
-}
+fn gather_all_paths(base: Vec<String>, files: bool, all: bool) -> Vec<String> {
+  let config = Config::from_env();
 
-fn print_init(exe: &str) {
-  let exe = get_executable_path(exe).unwrap_or(String::from("j2"));
-  let s = sh_init::SH_INIT.replace("<EXECUTABLE_PATH>", exe.as_str());
-  println!("{}", s.trim());
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Dir {
-  path: String,
-  name: String,
-  loss: u32,
-}
-
-fn edit_distance(
-  path: &str,
-  query: &str,
-) -> u32 {
-  let p = path.as_bytes();
-  let q = query.as_bytes();
-  let mut d = vec![vec![0; p.len()]; 2];
-  for i in 0..p.len() {
-    d[1][i] = 0 as u32;
-  }
-  for i in 0..q.len() {
-    let qc = q[i];
-    let qp = if i == 0 { 1 } else { q[i - 1] };
-    for j in 0..p.len() {
-      let pc = p[j];
-      let pp = if j == 0 { 0 } else { p[j - 1] };
-      let mut costs = vec![0];
-      if qc == pc {
-        if j == 0 {
-          costs.push(200);
-        } else {
-          costs.push(d[(i + 1) % 2][j - 1] + if qp == pp { 200 } else { 100 });
-        }
-      }
-      d[i % 2][j] = *costs.iter().max().unwrap();
-    }
-  }
-  d[(q.len() + 1) % 2].iter().max().unwrap_or(&0).clone() + 4096 - (p.len() as u32)
-}
-
-fn gather_directories(
-  config: &Config,
-  result: &mut Vec<Dir>,
-  root: &str,
-  original_query: &str,
-  query: &str,
-  dir: &path::Path,
-) {
-  if !dir.is_dir() {
-    return;
-  }
-  let filename = dir.file_name().unwrap().to_str().unwrap();
-  if config.ignores.contains(&filename.to_string()) {
-    return;
-  }
-  let path_name = filename.to_lowercase();
-  let mut query_chars = query.char_indices().peekable();
-  let p = query_chars.peek();
-  if p.is_some() && p.unwrap().1 == '/' {
-    query_chars.next();
-  }
-  for c in path_name.chars() {
-    if let Some(qc) = query_chars.peek() {
-      if c == qc.1 {
-        query_chars.next();
-      }
-    }
-  }
-  if query_chars.peek().is_none() {
-    // Found!
-    let path = dir.to_str().unwrap();
-    result.push(Dir {
-      path: path.to_string(),
-      name: filename.to_string(),
-      loss: edit_distance(path.strip_prefix(root).unwrap_or(path), original_query),
-    });
+  let base_paths = if base.is_empty() {
+    config.find_base_paths.clone()
   } else {
-    let new_query = &query[query_chars.peek().unwrap().0..];
-    // Find recursively
-    if let Ok(entries) = dir.read_dir() {
-      // Check directory contains .git
-      let mut has_git = false;
-      for entry in dir.read_dir().unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let file_name = path.file_name();
-        if file_name.is_some()
-          && file_name.unwrap().to_str().unwrap() == ".git"
-        {
-          has_git = true;
-          break;
-        }
+    base
+      .iter()
+      .map(|s| s.split(":").map(|s| s.to_string()))
+      .flatten()
+      .collect()
+  };
+
+  // Traverse all directories and gather paths
+  let paths = std::sync::Mutex::new(vec![]);
+
+  for base in base_paths.iter() {
+    let mut builder = ignore::WalkBuilder::new(base);
+    builder.standard_filters(true).hidden(!all);
+    if let Some(p) = &config.ignore_file_path {
+      if let Some(_err) = builder.add_ignore(p) {
+        // eprintln!("Error to load ignore file({})\n{}", p, _err);
       }
-      if has_git {
-        return;
-      }
-      for entry in entries {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        let file_name = path.file_name();
-        let hidden = file_name.is_some()
-          && file_name.unwrap().to_str().unwrap().starts_with(".");
-        if path.is_dir() && !hidden {
-          gather_directories(config, result, root, original_query, new_query, &path);
+    }
+    builder.build_parallel().run(|| {
+      Box::new(|result| {
+        if let Ok(entry) = result {
+          let path = entry.path();
+          if path.is_dir() || files {
+            let mut paths = paths.lock().unwrap();
+            paths.push(path.to_str().unwrap().to_string());
+          }
         }
+        ignore::WalkState::Continue
+      })
+    });
+  }
+
+  // Destruct paths from mutex wrapper
+  paths.into_inner().unwrap()
+}
+
+fn cmd_find_first(paths: &Vec<String>, query: &String) {
+  let mut ed = fuzzy::EditDist::new();
+  ed.update_query(&query.chars().collect());
+  let mut min_dist = std::u32::MAX;
+  let mut min_path = None;
+  for path in paths {
+    if let Some(cost) = ed.run(path) {
+      if cost < min_dist {
+        min_dist = cost;
+        min_path = Some(path);
       }
     }
   }
-}
-
-fn find_path(config: &Config, search: &str) -> Vec<String> {
-  let mut result: Vec<Dir> = vec![];
-  for base_path in &config.find_base_paths {
-    let path = path::Path::new(base_path);
-    gather_directories(config, &mut result, base_path, search, search, path);
+  if let Some(min_path) = min_path {
+    println!("{}", min_path);
+  } else {
+    exit(1);
   }
-  result.sort_by(|a, b| b.loss.cmp(&a.loss));
-  result.iter().map(|d| d.path.clone()).collect()
 }
 
-fn clone(config: &Config, repo_url: &str) {
+fn cmd_find_interactively(paths: &Vec<String>, query: &String) {
+  let result = ui_finder::run(paths.clone(), query.clone());
+  if let Some(result) = result {
+    println!("{}", result);
+  } else {
+    exit(1);
+  }
+}
+
+fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
   // Split repo_url by protocal
-  let url_clone = repo_url.clone();
+  let url_clone = repo_url;
   let splitted: Vec<&str> = url_clone.split("://").collect();
   if splitted.len() != 2 {
     println!("Invalid repo url: {}", repo_url);
@@ -166,14 +111,15 @@ fn clone(config: &Config, repo_url: &str) {
   )))
   .expect("Failed to create directory");
   // Clone repo
-  Command::new("git")
+  let mut cmd = Command::new("git");
+  let mut cmd = cmd
     .arg("clone")
     .arg(repo_url)
-    .arg(format!("{}/{}", config.repos_path, splitted[1]))
-    .spawn()
-    .expect("Failed to clone repo")
-    .wait()
-    .unwrap();
+    .arg(format!("{}/{}", config.repos_path, splitted[1]));
+  if let Some(d) = depth {
+    cmd = cmd.arg(format!("--depth={}", d));
+  }
+  cmd.spawn().expect("Failed to clone repo").wait().unwrap();
 }
 
 fn jone_list(config: &Config) {
@@ -194,9 +140,7 @@ fn jone_list(config: &Config) {
   }
 }
 
-fn empty_jone_name() -> String {
-  String::from("_")
-}
+const EMPTY_JONE_NAME: &str = "_";
 
 fn canonicalize_jone_name(name: &str) -> String {
   // Convert to lowercase and replace whitespaces into underscores
@@ -254,83 +198,89 @@ fn jone_section_list(config: &Config, name: &str) -> vec::Vec<JoneSection> {
   list
 }
 
-fn run(args: Vec<String>) {
-  let l = args.len();
-  if l <= 1 {
-    help_msg::print_help();
-    return;
+fn cmd_shell_init() {
+  // Get args
+  let args: Vec<String> = env::args().collect();
+  let exe = get_executable_path(args[0].as_str()).unwrap_or(String::from("j2"));
+  let s = sh_init::SH_INIT.replace("<EXECUTABLE_PATH>", exe.as_str());
+  println!("{}", s.trim());
+}
+
+fn cmd_clone(url: &String, depth: Option<u32>) {
+  let config = Config::from_env();
+  clone(&config, url, depth);
+}
+
+fn cmd_jone_new(name: &String) {
+  let config = Config::from_env();
+  let p = jone_new(&config, name);
+  println!("{}", p);
+}
+
+fn cmd_jone_list() {
+  let config = Config::from_env();
+  jone_list(&config);
+}
+
+fn cmd_jone_section_list(name: &String) {
+  let config = Config::from_env();
+  let list = jone_section_list(&config, name);
+  for section in list {
+    println!("{}", section.to_string());
   }
-  match args[1].as_str() {
-    "version" => {
-      print_version();
-    }
-    "init" => {
-      print_init(args[0].as_str());
-    }
-    "find" => {
-      let config = Config::from_env();
-      let query = args[2..].join("").to_lowercase();
-      let result = find_path(&config, query.as_str());
-      for path in result {
-        println!("{}", path);
-      }
-    }
-    "clone" => {
-      if args.len() < 3 {
-        println!("Usage: J2 clone <REPO_URL>");
-        exit(1);
-      }
-      let url = args[2..].join("");
-      let config = Config::from_env();
-      clone(&config, url.as_str());
-    }
-    "jone-new" => {
-      let config = Config::from_env();
-      let name = if args.len() < 3 {
-        empty_jone_name()
-      } else {
-        args[2..].join(" ")
-      };
-      let p = jone_new(&config, name.as_str());
-      println!("{}", p);
-    }
-    "jone-list" => {
-      let config = Config::from_env();
-      jone_list(&config);
-    }
-    "jone-sections" => {
-      let config = Config::from_env();
-      let name = if args.len() < 3 {
-        empty_jone_name()
-      } else {
-        args[2..].join(" ")
-      };
-      let list = jone_section_list(&config, name.as_str());
-      for section in list {
-        println!("{}", section.to_string());
-      }
-    }
-    "jone-latest" => {
-      let config = Config::from_env();
-      let name = if args.len() < 3 {
-        empty_jone_name()
-      } else {
-        args[2..].join(" ")
-      };
-      let list = jone_section_list(&config, name.as_str());
-      if list.len() > 0 {
-        println!("{}/{}/{}", config.jones_path, name, list[0].to_string());
-      } else {
-        let p = jone_new(&config, name.as_str());
-        println!("{}", p);
-      }
-    }
-    _ => {
-      help_msg::print_help();
-    }
+}
+
+fn cmd_jone_latest(name: &String) {
+  let config = Config::from_env();
+  let list = jone_section_list(&config, name);
+  if list.len() > 0 {
+    println!("{}/{}/{}", config.jones_path, name, list[0].to_string());
+  } else {
+    let p = jone_new(&config, name);
+    println!("{}", p);
+  }
+}
+
+fn name_list_to_string(name: &Vec<String>, delimiter: &str) -> String {
+  let joined = name.join(delimiter);
+  let trimmed = joined.trim();
+  if trimmed.len() <= 0 {
+    EMPTY_JONE_NAME.to_string()
+  } else {
+    trimmed.to_string()
   }
 }
 
 fn main() {
-  run(env::args().collect());
+  // Parse command line arguments
+  let parsed_command = cli::Cli::parse();
+  match parsed_command.command {
+    cli::Command::ShellInit => cmd_shell_init(),
+    cli::Command::Find {
+      query,
+      base,
+      first,
+      files,
+      all,
+    } => {
+      let paths = gather_all_paths(base, files, all);
+      let query = query.join("");
+      if first {
+        cmd_find_first(&paths, &query);
+      } else {
+        cmd_find_interactively(&paths, &query);
+      }
+    }
+    cli::Command::Clone { url, depth } => cmd_clone(&url, depth),
+    cli::Command::JoneList => cmd_jone_list(),
+    cli::Command::JoneNew { name } => {
+      cmd_jone_new(&name_list_to_string(&name, " "));
+    }
+    cli::Command::JoneSections { name } => {
+      cmd_jone_section_list(&name_list_to_string(&name, " "));
+    }
+    cli::Command::JoneLatest { name } => {
+      cmd_jone_latest(&name_list_to_string(&name, " "));
+    }
+  }
 }

@@ -1,54 +1,85 @@
 # J2
 
-lumiknit's jump helper 2.
+> A lazy brown programmer will jump over the directories quickly!
 
-## Objective
+lumiknit's jump helper, the second edition.
 
-- Fuzzy find and jump to the directory
-- Clone some repository with less path-conflictions
-- Make tagged sandbox & notes
+![preview](./preview.webp)
+
+## Features
+
+- Fuzzy finder for path
+	- With fzf-like TUI
+	- Find directory and cd/pushd/edit with less typing
+- Clone repository with less path-conflictions
+- Make tagged sandboxes
+  - Which managed by date and random number
+  - With README note
 
 ## Installation
 
-- Run `cargo install --path .`
+- Run `cargo install --git https://github.com/lumiknit/J2`
 - Add configuration in shell profile, such as `.bashrc` or `.zshrc`
 
 ### Example Configuration
 
 ```sh
+# You may need to set HOME if not
 export HOME=/Users/user
+
 # Repository path, where cloned repositories are stored
 export J2_REPOS_PATH="$HOME/repos"
+
 # Root paths to fuzzy find and jump. Multiple paths are separated by colon.
 export J2_FIND_BASE_PATHS="$HOME/repos:$HOME/workspace"
-# Path list to be ignored during fuzzy find. Multiple paths are separated by colon.
-export J2_IGNORES="node_modules:target:dist:venv"
+
+# ignore file path containing directories to ignore
+# You can write this file as any other ignore file, such as .gitignore!
+# export J2_IGNORE="$HOME/.J2_ignore"
+
 # Path to jones (j-zone, sandbox).
 export J2_JONES_PATH="$HOME/workspace/jones"
-# Default editor for jones. It'll be used as `$J2_EDITOR <FILENAME>`.
-export J2_EDITOR="vi"
+
+# Default editor to be used by J2
+export J2_EDITOR="code"
+
 # Initialize j2 functions
-eval "$(/path/to/j2 init)"
+eval "$(j2 shell-init)"
 ```
 
-Note that the above will apply some commands such as `J`, `j`, `j-`, `j--`, `j.`.
+Note that the above will override some commands such as `J`, `j`, `j-`, `j--`, `j.`.
 
 ## Usage
 
+### Find Path
+
+To find some subdirectory in your `J2_FIND_BASE_PATHS`, run `j2 find`. See `j2 find --help` for more details.
+
+### Jump to Path
+
+To jump to some subdirectory in your `J2_FIND_BASE_PATHS`, just run `j <QUERY>` (equivalent to `J cd <QUERY>`).
+It'll open a TUI to find a directory with the given query, and cd to the selected directory.
+
+Instead of `J cd`, you can use
+
+- `j! <QUERY>` (equivalent to `J edit <QUERY>`): open editor
+- `J pushd <QUERY>`: push directory
+
+Note that this jump commands basically use `j2 find` command. You can use any other options for `j2 find` command!
+
+#### Fuzzy finder shortcuts
+
+- `Enter`: Select the current item and quit
+- `up/down`, `Ctrl-p/n`, `Alt-k/j`: Select up/down items
+- `left/right`, `Alt-h/l`: Move cursor to the left/right
+- `Ctrl-a/e`, `Home/End`: Move cursor to the beginning/end
+- `Esc`, `Ctrl-*`: Quit without selecting
+
 ### Clone Repository
 
-To clone some repository, run `j2 clone <URL>` or `J clone <URL>`.
+To clone some repository, run `J clone <URL>` (equivalent to `j2 clone <URL>`).
 It'll create a directory in J2_REPOS_PATH and clone the repository.
 For example, `J clone https://github.com/lumiknit/J2` will create `$J2_REPOS_PATH/github.com/lumiknit/J2`.
-
-### Jump
-
-To jump to some directory, run one of `J cd <QUERY>` or `j <QUERY>`.
-It'll find a directory in one of J2_FIND_BASE_PATHS, which subpath containing QUERY.
-
-If you want pushd instead of cd, run `J pushd <QUERY>`.
-
-If you already installed `fd` and `fzf`, just type `j` to interactive finding.
 
 ### Jones
 
