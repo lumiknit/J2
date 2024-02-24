@@ -1,6 +1,6 @@
 /* luminkit's jump helper 2
  * Author: lumiknit (aasr4r4@gmail.com)
- * Version: 0.2.1-dev (240224)
+ * Version: 0.2.1 (240224)
  */
 
 use std::process::{exit, Command};
