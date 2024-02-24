@@ -1,4 +1,4 @@
-use chrono::Datelike;
+use chrono::{Datelike, Timelike};
 use std::time;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -20,12 +20,18 @@ pub struct JoneSection {
 impl JoneSection {
   pub fn gen() -> Self {
     let now = chrono::Local::now();
+
+    // NOTE: rand is now deprecated. use seconds instead.
+    //let rand = rand::random::<u32>() % 36_u32.pow(4);
+
+    let non_rand = now.second() + 60 * (now.minute() + 60 * now.hour());
+    let rand = non_rand * 10 + (rand::random::<u32>() % 10);
     Self {
       sys_time: time::SystemTime::now(),
       year: now.year_ce().1 % 100,
       month: now.month(),
       day: now.day(),
-      rand: rand::random::<u32>() % 36_u32.pow(4),
+      rand,
       base: JoneSectionBase::Base36,
     }
   }
@@ -42,7 +48,7 @@ impl JoneSection {
 
   pub fn to_base36(&self) -> String {
     format!(
-      "{:02}{:01}{:01}-{}",
+      "{:02}{:01}{:01}-{:04}",
       self.year,
       char::from_digit(self.month, 36).unwrap(),
       char::from_digit(self.day, 36).unwrap(),
@@ -53,7 +59,10 @@ impl JoneSection {
   pub fn to_base10(&self) -> String {
     format!(
       "{:02}{:02}{:02}-{:04}",
-      self.year, self.month, self.day, self.rand
+      self.year,
+      self.month,
+      self.day,
+      self.base36_rand(),
     )
   }
 

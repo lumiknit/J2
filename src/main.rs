@@ -161,7 +161,7 @@ fn jone_new(config: &Config, name: &str) -> String {
   // Make directory
   fs::create_dir_all(&jone_path).expect("Failed to create directory");
   // Create jone file
-  let section_name = JoneSection::gen().to_base36();
+  let section_name = JoneSection::gen().to_base10();
   let section_path = format!("{}/{}", jone_path, section_name);
   fs::create_dir(path::Path::new(&section_path))
     .expect("Failed to create directory");
