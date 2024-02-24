@@ -63,7 +63,7 @@ It'll open a TUI to find a directory with the given query, and cd to the selecte
 Instead of `J cd`, you can use
 
 - `j! <QUERY>` (equivalent to `J edit <QUERY>`): open editor
-- `J pushd <QUERY>`: push directory
+- `J pushd <QUERY>`: push directory (See [Pushd and Popd](https://en.wikipedia.org/wiki/Pushd_and_popd))
 
 Note that this jump commands basically use `j2 find` command. You can use any other options for `j2 find` command!
 
