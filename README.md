@@ -18,7 +18,7 @@ lumiknit's jump helper, the second edition.
 
 ## Installation
 
-- Run `cargo install --git https://github.com/lumiknit/J2 --branch v0.2.0`
+- Run `cargo install --git https://github.com/lumiknit/J2`
 - Add configuration in shell profile, such as `.bashrc` or `.zshrc`
 
 ### Example Configuration
