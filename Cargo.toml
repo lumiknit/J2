@@ -18,7 +18,7 @@ ignore = "0.4.22"
 unicode-width = "0.1.11"
 
 [profile.release]
-opt-level="z"
+opt-level=3
 strip = true
 lto = true
 codegen-units = 1

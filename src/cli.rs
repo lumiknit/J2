@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand)]
 pub enum Command {
   #[clap(about = "Initialization script for shell")]
   ShellInit,
@@ -60,14 +60,10 @@ pub enum Command {
   },
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(author, version, about)]
 #[command(propagate_version = true)]
 pub struct Cli {
   #[clap(subcommand)]
   pub command: Command,
-}
-
-pub fn parse_command() -> Cli {
-  Cli::parse()
 }

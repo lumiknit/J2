@@ -4,6 +4,8 @@
 
 lumiknit's jump helper, the second edition.
 
+!(preview)[./preview.webp]
+
 ## Features
 
 - Fuzzy finder for path

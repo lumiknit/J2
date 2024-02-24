@@ -142,7 +142,7 @@ j_() {
 j.() {
   J jone-note $@
 }
-complete -W "version find cd pushd clone jone-new jone-list jone-sections jone-note" J
+complete -W "version find cd pushd edit clone jone-new jone-list jone-sections jone-note" J
 complete -F __J2_LIST "j--"
 complete -F __J2_LIST "j-+"
 complete -F __J2_LIST "j-"

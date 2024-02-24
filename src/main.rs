@@ -1,6 +1,6 @@
 /* luminkit's jump helper 2
  * Author: lumiknit (aasr4r4@gmail.com)
- * Version: 0.2.0-dev (240216)
+ * Version: 0.2.0 (240224)
  */
 
 use std::process::{exit, Command};
@@ -13,6 +13,7 @@ pub mod section;
 pub mod sh_init;
 pub mod ui_finder;
 
+use clap::Parser;
 use config::Config;
 use section::JoneSection;
 
@@ -252,7 +253,7 @@ fn name_list_to_string(name: &Vec<String>, delimiter: &str) -> String {
 
 fn main() {
   // Parse command line arguments
-  let parsed_command = cli::parse_command();
+  let parsed_command = cli::Cli::parse();
   match parsed_command.command {
     cli::Command::ShellInit => cmd_shell_init(),
     cli::Command::Find {

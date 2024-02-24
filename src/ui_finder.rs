@@ -18,7 +18,7 @@ use unicode_width::UnicodeWidthChar;
 
 use crate::fuzzy;
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
 struct FilteredKey {
   cost: u32,
   index: usize,
