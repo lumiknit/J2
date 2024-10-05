@@ -222,7 +222,9 @@ fn cmd_shell_init(shell: ShellType) {
     ShellType::Sh => include_str!("init.sh"),
     ShellType::Pwsh => include_str!("init.ps1"),
   };
-  let s = script.replace("<EXECUTABLE_PATH>", exe.as_str());
+  let s = script
+    .replace("<EXECUTABLE_PATH>", exe.as_str())
+    .replace("<INIT_HELP>", include_str!("init_help.txt"));
   println!("{}", s.trim());
 }
 
@@ -276,9 +278,17 @@ fn main() {
   let parsed_command = cli::Cli::parse();
   match parsed_command.command {
     cli::Command::ShellInit { shell } => {
-      let sh = shell
-        .and_then(|s| ShellType::from_string(s.as_str()))
-        .unwrap_or(ShellType::Sh);
+      let sh = if let Some(s) = shell {
+        let parsed = ShellType::from_string(s.as_str());
+        if let Some(parsed) = parsed {
+          parsed
+        } else {
+          eprintln!("Invalid shell type '{}', available options: sh, pwsh", s);
+          exit(1);
+        }
+      } else {
+        ShellType::Sh
+      };
       cmd_shell_init(sh)
     },
     cli::Command::Find {

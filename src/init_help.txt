@@ -1,0 +1,35 @@
+luminkit's jump helper 2
+Usage: J <COMMAND> [ARGS]
+
+Commands:
+	help: Print this help message
+	version: Print the version
+
+	find <QUERY>: Find a directory
+	cd <QUERY>: Change directory
+	pushd <QUERY>: Push directory
+	edit <QUERY>: Edit the directory
+	clone <REPO_URL>: Clone a git repository
+
+	jone-new [<NAME>]: Create a new jone (j-zone)
+	jone-list: List jones
+	jone-sections [<NAME>]: List sections in the jone
+	jone-note [<NAME>]: Edit jone notes
+
+Environment variables:
+	J2_REPOS_DIR: The directory where git repositories are stored
+	J2_FIND_BASE_PATHS: The base paths to find directories (separated by ':')
+	J2_IGNORES: The directories to ignore when finding (separated by ':')
+	J2_JONE_PATH: The path to store jone files (default: ~/.J2-jones)
+	J2_EDITOR: The command name of editor to edit jone notes (default: vi)
+
+Shortcuts:
+	j <QUERY>: Find a directory and cd
+	j! <QUERY>: Edit a directory and cd
+	j-+ [<NAME>]: Create a new jone & section with name.
+	j-- [<NAME>]: Create a new jone & section and move to the section in the jone NAME.
+	j--! [<NAME>]: Create a new jone & section and open editor in the section in the jone.
+	j- [<NAME>]: Move to the latest section in the jone NAME.
+	j-! [<NAME>]: Open editor in the latest section in the jone NAME.
+	j_ [<NAME>]: List of sections in the jone NAME.
+	j. [<NAME>]: Open the note file of the latest section in the jone.
