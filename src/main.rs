@@ -1,6 +1,6 @@
 /* luminkit's jump helper 2
  * Author: lumiknit (aasr4r4@gmail.com)
- * Version: 0.2.1 (240224)
+ * Version: 0.2.2 (241005)
  */
 
 use std::process::{exit, Command};
@@ -270,7 +270,7 @@ fn main() {
   // Parse command line arguments
   let parsed_command = cli::Cli::parse();
   match parsed_command.command {
-    cli::Command::ShellInit => cmd_shell_init(),
+    cli::Command::ShellInit { shell } => cmd_shell_init(),
     cli::Command::Find {
       query,
       base,
