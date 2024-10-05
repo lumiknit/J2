@@ -169,6 +169,6 @@ function j. {
 
 # To initialize this for your shell, you should add the script to your PowerShell profile script.
 # For example, execute the following command:
-# Add-Content $PROFILE "$(j2 shell-init pwsh)"
+# Add-Content $PROFILE $(j2 shell-init pwsh)
 # Then, restart your shell or execute the following command:
 # . $PROFILE
