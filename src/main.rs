@@ -121,17 +121,11 @@ fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
     exit(1)
   }
   // Mkdir
-  fs::create_dir_all(std::path::Path::new(&format!(
-    "{}/{}",
-    config.repos_path, splitted[1]
-  )))
-  .expect("Failed to create directory");
+  let path = std::path::Path::new(&config.repos_path).join(splitted[1]);
+  fs::create_dir_all(path.clone()).expect("Failed to create directory");
   // Clone repo
   let mut cmd = Command::new("git");
-  let mut cmd = cmd
-    .arg("clone")
-    .arg(repo_url)
-    .arg(format!("{}/{}", config.repos_path, splitted[1]));
+  let mut cmd = cmd.arg("clone").arg(repo_url).arg(path.to_str().unwrap());
   if let Some(d) = depth {
     cmd = cmd.arg(format!("--depth={}", d));
   }
@@ -173,20 +167,20 @@ fn canonicalize_jone_name(name: &str) -> String {
 
 fn jone_new(config: &Config, name: &str) -> String {
   let name = canonicalize_jone_name(name);
-  let jone_path = format!("{}/{}", config.jones_path, name);
+  let jone_path = std::path::Path::new(&config.jones_path).join(name);
   // Make directory
   fs::create_dir_all(&jone_path).expect("Failed to create directory");
   // Create jone file
   let section_name = JoneSection::gen().to_base10();
-  let section_path = format!("{}/{}", jone_path, section_name);
+  let section_path = jone_path.join(section_name);
   fs::create_dir(std::path::Path::new(&section_path))
     .expect("Failed to create directory");
-  section_path
+  section_path.to_str().unwrap().to_string()
 }
 
 fn jone_section_list(config: &Config, name: &str) -> vec::Vec<JoneSection> {
   let name = canonicalize_jone_name(name);
-  let jone_path = format!("{}/{}", config.jones_path, name);
+  let jone_path = std::path::Path::new(&config.jones_path).join(name);
   // Read jone directories
   let path = std::path::Path::new(&jone_path);
   let entries = path.read_dir();
@@ -256,7 +250,14 @@ fn cmd_jone_latest(name: &String) {
   let config = Config::from_env();
   let list = jone_section_list(&config, name);
   if list.len() > 0 {
-    println!("{}/{}/{}", config.jones_path, name, list[0].to_string());
+    println!(
+      "{}",
+      std::path::Path::new(&config.jones_path)
+        .join(name)
+        .join(list[0].to_string())
+        .to_str()
+        .unwrap()
+    )
   } else {
     let p = jone_new(&config, name);
     println!("{}", p);
@@ -290,7 +291,7 @@ fn main() {
         ShellType::Sh
       };
       cmd_shell_init(sh)
-    },
+    }
     cli::Command::Find {
       query,
       base,
