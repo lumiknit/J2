@@ -1,4 +1,3 @@
-pub static SH_INIT: &str = r#"
 # luminkit's jump helper 2
 # Use with: eval "$(j2 shell-init)"
 
@@ -166,4 +165,3 @@ complete -F __J2_LIST "j!"
 # eval "$(j2 shell-init)"
 # To initialize this for your shell permanently, add the above line to your shell's rc file.
 # Set default values
-"#;
