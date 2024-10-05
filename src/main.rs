@@ -1,6 +1,6 @@
 /* luminkit's jump helper 2
  * Author: lumiknit (aasr4r4@gmail.com)
- * Version: 0.2.1 (240224)
+ * Version: 0.2.2 (241005)
  */
 
 use std::process::{exit, Command};
@@ -11,13 +11,14 @@ pub mod config;
 pub mod fuzzy;
 pub mod path;
 pub mod section;
-pub mod sh_init;
+pub mod shell;
 pub mod ui_finder;
 
 use clap::Parser;
 use config::Config;
 use path::PathItem;
 use section::JoneSection;
+use shell::ShellType;
 
 fn get_executable_path(exe: &str) -> Option<String> {
   // Convert relative path to absolute path
@@ -213,11 +214,17 @@ fn jone_section_list(config: &Config, name: &str) -> vec::Vec<JoneSection> {
   list
 }
 
-fn cmd_shell_init() {
+fn cmd_shell_init(shell: ShellType) {
   // Get args
   let args: Vec<String> = env::args().collect();
   let exe = get_executable_path(args[0].as_str()).unwrap_or(String::from("j2"));
-  let s = sh_init::SH_INIT.replace("<EXECUTABLE_PATH>", exe.as_str());
+  let script = match shell {
+    ShellType::Sh => include_str!("init.sh"),
+    ShellType::Pwsh => include_str!("init.ps1"),
+  };
+  let s = script
+    .replace("<EXECUTABLE_PATH>", exe.as_str())
+    .replace("<INIT_HELP>", include_str!("init_help.txt"));
   println!("{}", s.trim());
 }
 
@@ -270,7 +277,20 @@ fn main() {
   // Parse command line arguments
   let parsed_command = cli::Cli::parse();
   match parsed_command.command {
-    cli::Command::ShellInit => cmd_shell_init(),
+    cli::Command::ShellInit { shell } => {
+      let sh = if let Some(s) = shell {
+        let parsed = ShellType::from_string(s.as_str());
+        if let Some(parsed) = parsed {
+          parsed
+        } else {
+          eprintln!("Invalid shell type '{}', available options: sh, pwsh", s);
+          exit(1);
+        }
+      } else {
+        ShellType::Sh
+      };
+      cmd_shell_init(sh)
+    },
     cli::Command::Find {
       query,
       base,

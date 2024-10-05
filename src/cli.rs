@@ -3,7 +3,11 @@ use clap::{Parser, Subcommand};
 #[derive(Subcommand)]
 pub enum Command {
   #[clap(about = "Initialization script for shell")]
-  ShellInit,
+  ShellInit {
+    /// Type of shell
+    #[clap(help = "Type of shell (sh, pwsh)")]
+    shell: Option<String>,
+  },
 
   #[clap(about = "Execute fuzzy find")]
   Find {

@@ -19,9 +19,9 @@ lumiknit's jump helper, the second edition.
 ## Installation
 
 - Run `cargo install --git https://github.com/lumiknit/J2`
-- Add configuration in shell profile, such as `.bashrc` or `.zshrc`
+- Add configuration in shell profile, such as `.bashrc`, `.zshrc` or `$profile`
 
-### Example Configuration
+### Example Configuration for Sh / Bash / Zsh
 
 ```sh
 # You may need to set HOME if not
@@ -48,6 +48,37 @@ eval "$(j2 shell-init)"
 ```
 
 Note that the above will override some commands such as `J`, `j`, `j-`, `j--`, `j.`.
+
+### Example Configuration for PowerShell
+
+Since PowerShell does not support `eval`,
+you should insert the script from `j2 shell-init` manually.
+
+- `Add-Content $PROFILE $(j2 shell-init pwsh)` to add the script to your profile
+- Or create a file `Add-Content "<path_to_script>" $(j2 shell-init pwsh)` and import it in your profile such as `Add-Content $PROFILE ". <path_to_script>"`
+
+Then, add the following configuration to your profile:
+
+```pwsh
+# You may need to set HOME if not
+$env:HOME = "/Users/user"
+
+# Repository path, where cloned repositories are stored
+$env:J2_REPOS_PATH = "$env:HOME/repos"
+
+# Root paths to fuzzy find and jump. Multiple paths are separated by semicolon.
+$env:J2_FIND_BASE_PATHS = "$env:HOME/repos;$env:HOME/workspace"
+
+# ignore file path containing directories to ignore
+# You can write this file as any other ignore file, such as .gitignore!
+# $env:J2_IGNORE = "$env:HOME/.J2_ignore"
+
+# Path to jones (j-zone, sandbox).
+$env:J2_JONES_PATH = "$env:HOME/workspace/jones"
+
+# Default editor to be used by J2
+$env:J2_EDITOR = "code"
+```
 
 ## Usage
 

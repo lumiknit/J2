@@ -1,4 +1,3 @@
-pub static SH_INIT: &str = r#"
 # luminkit's jump helper 2
 # Use with: eval "$(j2 shell-init)"
 
@@ -34,7 +33,7 @@ __J2_find() {
 J() {
   case "$1" in
     version)
-      $__J2 version
+      $__J2 --version
       ;;
     find|f)
       __J2_find ${@:2}
@@ -86,35 +85,9 @@ J() {
       ;;
     *)
       # Print help message
-      echo "luminkit's jump helper 2"
-      echo "Usage: J <COMMAND> [ARGS]"
-      echo "Commands:"
-      echo "  version: Print the version"
-      echo "  find <QUERY>: Find a directory"
-      echo "  cd <QUERY>: Change directory"
-      echo "  pushd <QUERY>: Push directory"
-      echo "  edit <QUERY>: Edit the directory"
-      echo "  clone <REPO_URL>: Clone a git repository"
-      echo "  jone-new [<NAME>]: Create a new jone (j-zone)"
-      echo "  jone-list: List jones"
-      echo "  jone-sections [<NAME>]: List sections in the jone"
-      echo "  jone-note [<NAME>]: Edit jone notes"
-      echo "Environment variables:"
-      echo "  J2_REPOS_DIR: The directory where git repositories are stored"
-      echo "  J2_FIND_BASE_PATHS: The base paths to find directories (separated by ':')"
-      echo "  J2_IGNORES: The directories to ignore when finding (separated by ':')"
-      echo "  J2_JONE_PATH: The path to store jone files (default: ~/.J2-jones)"
-      echo "  J2_EDITOR: The command name of editor to edit jone notes (default: vi)"
-      echo "Shortcuts:"
-      echo "  j <QUERY>: Find a directory and cd"
-      echo "  j! <QUERY>: Edit a directory and cd"
-      echo "  j-+ [<NAME>]: Create a new jone & section with name."
-      echo "  j-- [<NAME>]: Create a new jone & section and move to the section in the jone NAME."
-      echo "  j--! [<NAME>]: Create a new jone & section and open editor in the section in the jone."
-      echo "  j- [<NAME>]: Move to the latest section in the jone NAME."
-      echo "  j-! [<NAME>]: Open editor in the latest section in the jone NAME."
-      echo "  j_ [<NAME>]: List of sections in the jone NAME."
-      echo "  j. [<NAME>]: Open the note file of the latest section in the jone "
+			cat << EOF
+<INIT_HELP>
+EOF
       ;;
   esac
 }
@@ -166,4 +139,3 @@ complete -F __J2_LIST "j!"
 # eval "$(j2 shell-init)"
 # To initialize this for your shell permanently, add the above line to your shell's rc file.
 # Set default values
-"#;

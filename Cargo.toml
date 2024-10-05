@@ -1,6 +1,6 @@
 [package]
 name = "j2"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["lumiknit <aasr4r4@gmail.com>"]
 description = "lumiknit's Jump Utility"
