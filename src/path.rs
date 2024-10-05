@@ -15,11 +15,10 @@ pub fn convert_base_paths_to_names(base_paths: &Vec<String>) -> Vec<PathItem> {
   let mut set = HashSet::new();
   let mut paths = Vec::new();
   for base_path in base_paths {
-    let last_name = base_path
-      .split("/")
-      .map(|s| s.trim())
-      .filter(|b| !b.is_empty())
-      .last()
+    let last_name = std::path::Path::new(base_path)
+      .file_name()
+      .unwrap()
+      .to_str()
       .unwrap();
     let mut name = last_name.to_string();
     let mut c = 0;
