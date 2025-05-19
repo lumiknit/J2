@@ -7,7 +7,7 @@ use crossterm::terminal::{
   disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use crossterm::{event, ExecutableCommand};
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Position};
 use ratatui::style::{self, Style};
 use ratatui::widgets::{
   Block, Borders, HighlightSpacing, List, ListDirection, ListState, Paragraph,
@@ -207,7 +207,7 @@ fn draw_ui(f: &mut Frame, s: &mut State) {
     Constraint::Length(1),
     Constraint::Length(1),
   ]);
-  let [list_area, bd_area, input_area] = vertical.areas(f.size());
+  let [list_area, bd_area, input_area] = vertical.areas(f.area());
 
   {
     // Draw input line
@@ -227,7 +227,10 @@ fn draw_ui(f: &mut Frame, s: &mut State) {
     f.render_widget(input, query_area);
 
     // Move cursor
-    f.set_cursor(query_area.x + s.ui_cursor as u16, query_area.y);
+    f.set_cursor_position(Position {
+      x: query_area.x + s.ui_cursor as u16,
+      y: query_area.y,
+    });
   }
 
   {
@@ -273,12 +276,15 @@ fn run_ui(s: &mut State) -> io::Result<String> {
   let mut terminal = Terminal::new(CrosstermBackend::new(stderr()))?;
 
   while !s.quit {
+    let start_time = std::time::Instant::now();
     if s.need_to_redraw {
       terminal.draw(|f| draw_ui(f, s))?;
       s.need_to_redraw = false;
     }
 
-    while event::poll(Duration::from_millis(35))? {
+    while start_time.elapsed() < Duration::from_millis(35)
+      && event::poll(start_time.elapsed())?
+    {
       handle_event_ui(s, event::read()?);
     }
 

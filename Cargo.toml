@@ -1,6 +1,6 @@
 [package]
 name = "j2"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 authors = ["lumiknit <aasr4r4@gmail.com>"]
 description = "lumiknit's Jump Utility"
@@ -10,15 +10,15 @@ license = "MIT"
 
 [dependencies]
 chrono = "0.4"
-rand = "0.8"
-clap = { version = "4.3", features = ["derive"] }
-ratatui = "0.26.1"
-crossterm = "0.27.0"
-ignore = "0.4.22"
-unicode-width = "0.1.11"
+rand = "0.9"
+clap = { version = "4.5", features = ["derive"] }
+ratatui = "0.29.0"
+crossterm = "0.29.0"
+ignore = "0.4.23"
+unicode-width = "0.2.0"
 
 [profile.release]
-opt-level=3
+opt-level = 3
 strip = true
 lto = true
 codegen-units = 1

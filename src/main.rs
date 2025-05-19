@@ -72,9 +72,10 @@ fn gather_all_paths(
               abs.clone()
             };
             paths.push(PathItem { displayed, abs });
+            return ignore::WalkState::Continue;
           }
         }
-        ignore::WalkState::Continue
+        ignore::WalkState::Skip
       })
     });
   }
