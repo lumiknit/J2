@@ -48,8 +48,8 @@ fn gather_all_paths(
   // Convert base paths to names
   let base_paths = path::convert_base_paths_to_names(&base_paths);
 
-  // Traverse all directories and gather paths
-  let paths = std::sync::Mutex::new(vec![]);
+  // Traverse all directories and gather paths via channel (no lock contention)
+  let (tx, rx) = std::sync::mpsc::channel::<PathItem>();
 
   for base in base_paths.into_iter() {
     let mut builder = ignore::WalkBuilder::new(base.abs.clone());
@@ -59,19 +59,29 @@ fn gather_all_paths(
         // eprintln!("Error to load ignore file({})\n{}", p, _err);
       }
     }
+    let base_abs = base.abs.clone();
+    let base_displayed = base.displayed.clone();
     builder.build_parallel().run(|| {
-      Box::new(|result| {
+      let tx = tx.clone();
+      let base_abs = base_abs.clone();
+      let base_displayed = base_displayed.clone();
+      Box::new(move |result| {
         if let Ok(entry) = result {
           let path = entry.path();
           if path.is_dir() || files {
-            let mut paths = paths.lock().unwrap();
             let abs = path.to_str().unwrap().to_string();
-            let displayed = if path.starts_with(&base.abs) {
-              base.displayed.clone() + ": " + &abs[base.abs.len()..].to_string()
+            let displayed = if path.starts_with(base_abs.as_str()) {
+              base_displayed.clone() + ": " + &abs[base_abs.len()..]
             } else {
               abs.clone()
             };
-            paths.push(PathItem { displayed, abs });
+            let displayed_lower = displayed.to_ascii_lowercase();
+            tx.send(PathItem {
+              displayed,
+              displayed_lower,
+              abs,
+            })
+            .ok();
             return ignore::WalkState::Continue;
           }
         }
@@ -80,8 +90,9 @@ fn gather_all_paths(
     });
   }
 
-  // Destruct paths from mutex wrapper
-  paths.into_inner().unwrap()
+  // Drop the original sender so rx.into_iter() terminates
+  drop(tx);
+  rx.into_iter().collect()
 }
 
 fn cmd_find_first(paths: &Vec<path::PathItem>, query: &String) {
@@ -90,7 +101,7 @@ fn cmd_find_first(paths: &Vec<path::PathItem>, query: &String) {
   let mut min_dist = std::u32::MAX;
   let mut min_path = None;
   for path in paths {
-    if let Some(cost) = ed.run(&path.displayed) {
+    if let Some(cost) = ed.run(&path.displayed, &path.displayed_lower) {
       if cost < min_dist {
         min_dist = cost;
         min_path = Some(path);
@@ -136,17 +147,25 @@ fn clone(config: &Config, repo_url: &str, depth: Option<u32>) {
 fn jone_list(config: &Config) {
   // Read jone directories
   let path = std::path::Path::new(&config.jones_path);
-  if let Ok(entries) = path.read_dir() {
-    for entry in entries {
-      let file_name = entry.ok().and_then(|e| e.file_name().into_string().ok());
-      if file_name.is_none() {
-        continue;
+  match path.read_dir() {
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+    Err(e) => panic!(
+      "Failed to read jones directory '{}': {}",
+      config.jones_path, e
+    ),
+    Ok(entries) => {
+      for entry in entries {
+        let file_name =
+          entry.ok().and_then(|e| e.file_name().into_string().ok());
+        if file_name.is_none() {
+          continue;
+        }
+        let file_name = file_name.unwrap();
+        if file_name.starts_with(".") {
+          continue;
+        }
+        println!("{}", file_name);
       }
-      let file_name = file_name.unwrap();
-      if file_name.starts_with(".") {
-        continue;
-      }
-      println!("{}", file_name);
     }
   }
 }
@@ -160,7 +179,9 @@ fn canonicalize_jone_name(name: &str) -> String {
     if c.is_whitespace() {
       result.push('_');
     } else {
-      result.push(c.to_lowercase().next().unwrap());
+      for lc in c.to_lowercase() {
+        result.push(lc);
+      }
     }
   }
   result
@@ -184,11 +205,15 @@ fn jone_section_list(config: &Config, name: &str) -> vec::Vec<JoneSection> {
   let jone_path = std::path::Path::new(&config.jones_path).join(name);
   // Read jone directories
   let path = std::path::Path::new(&jone_path);
-  let entries = path.read_dir();
-  if entries.is_err() {
-    return vec![];
-  }
-  let entries = entries.unwrap();
+  let entries = match path.read_dir() {
+    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return vec![],
+    Err(e) => panic!(
+      "Failed to read jone directory '{}': {}",
+      jone_path.display(),
+      e
+    ),
+    Ok(e) => e,
+  };
   let mut list = vec![];
   for entry in entries {
     if entry.is_err() {

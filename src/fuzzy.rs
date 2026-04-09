@@ -32,18 +32,16 @@ impl EditDist {
   const COST_MATCH_NON_CONTD: u32 = 1;
   const COST_MATCH_NON_ABBREV: u32 = 7;
 
-  pub fn run(&mut self, target: &String) -> Option<u32> {
+  pub fn run(&mut self, target: &str, target_lower: &str) -> Option<u32> {
     // If the query is empty, just return inverse of length
     if self.q.is_empty() {
       // Then length is a cost
       return Some(target.len() as u32);
     }
 
-    // Convert target string into chars
+    // Use pre-lowercased target chars
     self.target_chars.clear();
-    self
-      .target_chars
-      .extend(target.chars().map(|c| c.to_ascii_lowercase()));
+    self.target_chars.extend(target_lower.chars());
 
     // Check if the query is contained in the target in linear time
 
@@ -111,7 +109,7 @@ impl EditDist {
           if !after_sep {
             cost = cost.saturating_add(Self::COST_MATCH_NON_ABBREV);
           }
-          if qp != pp {
+          if j > 0 && qp != pp {
             cost = cost.saturating_add(Self::COST_MATCH_NON_CONTD);
           }
         }

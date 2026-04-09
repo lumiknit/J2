@@ -6,6 +6,7 @@ use std::collections::HashSet;
 pub struct PathItem {
   // Displayed path (also used for query)
   pub displayed: String,
+  pub displayed_lower: String,
 
   // Absolute path (real paths)
   pub abs: String,
@@ -29,8 +30,10 @@ pub fn convert_base_paths_to_names(base_paths: &Vec<String>) -> Vec<PathItem> {
     }
     set.insert(name.clone());
 
+    let displayed_lower = name.to_ascii_lowercase();
     paths.push(PathItem {
       displayed: name,
+      displayed_lower,
       abs: base_path.clone(),
     });
   }

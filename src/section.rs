@@ -76,20 +76,30 @@ impl JoneSection {
   pub fn from_str(s: &str, sys_time: Option<time::SystemTime>) -> Option<Self> {
     if s.len() == 9 && s[4..5].contains('-') {
       // Base36
+      let month = u32::from_str_radix(&s[2..3], 36).ok()?;
+      let day = u32::from_str_radix(&s[3..4], 36).ok()?;
+      if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+      }
       Some(Self {
         year: u32::from_str_radix(&s[0..2], 10).ok()?,
-        month: u32::from_str_radix(&s[2..3], 36).ok()?,
-        day: u32::from_str_radix(&s[3..4], 36).ok()?,
+        month,
+        day,
         sys_time: sys_time.unwrap_or(time::SystemTime::now()),
         rand: u32::from_str_radix(&s[5..9], 36).ok()?,
         base: JoneSectionBase::Base36,
       })
     } else if s.len() == 11 && s[6..7].contains("-") {
       // Base10
+      let month = u32::from_str_radix(&s[2..4], 10).ok()?;
+      let day = u32::from_str_radix(&s[4..6], 10).ok()?;
+      if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+      }
       Some(Self {
         year: u32::from_str_radix(&s[0..2], 10).ok()?,
-        month: u32::from_str_radix(&s[2..4], 10).ok()?,
-        day: u32::from_str_radix(&s[4..6], 10).ok()?,
+        month,
+        day,
         sys_time: sys_time.unwrap_or(time::SystemTime::now()),
         rand: u32::from_str_radix(&s[7..11], 36).ok()?,
         base: JoneSectionBase::Base10,

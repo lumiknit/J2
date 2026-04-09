@@ -7,8 +7,8 @@ fi
 if [ -z "$J2_IGNORE" ]; then
   export J2_IGNORE="$HOME/.J2_ignore"
 fi
-if [ -z "$J2_JONE_PATH" ]; then
-  export J2_JONE_PATH="$HOME/.J2_jones"
+if [ -z "$J2_JONES_PATH" ]; then
+  export J2_JONES_PATH="$HOME/.J2_jones"
 fi
 if [ -z "$J2_EDITOR" ]; then
   export J2_EDITOR="vi"

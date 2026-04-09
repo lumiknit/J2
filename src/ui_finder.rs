@@ -143,7 +143,7 @@ impl State {
       let item = &self.list[idx];
 
       // Calculate cost
-      if let Some(cost) = self.ed.run(&item.displayed) {
+      if let Some(cost) = self.ed.run(&item.displayed, &item.displayed_lower) {
         self.filtered.insert(FilteredKey { cost, index: idx }, idx);
       }
 
